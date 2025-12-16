@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Any
 
 import pynauty as pn
+from qcio import Structure
 
 
 def _list_of_sets(coloring: list[Any]) -> list[set[Any]]:
@@ -25,7 +26,32 @@ def _list_of_sets(coloring: list[Any]) -> list[set[Any]]:
     return [buckets[key] for key in ordered_keys]
 
 
-def _to_pynauty_graph(adj_dict: dict[int, list[int]], coloring: list[Any]) -> pn.Graph:
+def _to_pynauty_graph(struct: Structure, coloring: list[Any] | None = None) -> pn.Graph:
+    """
+    Convert a Structure's and optional coloring list to a pynauty Graph.
+
+    Parameters:
+        struct: The Structure to convert.
+        coloring: Optional list of color IDs for each vertex, e.g., [0,0,0,3,3,3]
+            indicates atoms 0-2 are of one color and atoms 3-5 are a second color.
+            If no value is provided the Structure's symbols array is used as the
+            default coloring.
+    Returns:
+        The corresponding pynauty Graph.
+    """
+    if coloring is None:
+        coloring = struct.symbols
+    adj_dict = struct.adjacency_dict
+    if not adj_dict:
+        # TODO: Add parameter `compute_connectivity_if_missing: bool = True`
+        raise ValueError("Structure has no connectivity defined.")
+
+    return _to_pynauty_graph_adj_color(adj_dict, struct.symbols)
+
+
+def _to_pynauty_graph_adj_color(
+    adj_dict: dict[int, list[int]], coloring: list[Any]
+) -> pn.Graph:
     """
     Convert an adjacency dictionary and coloring list to a pynauty Graph.
 
@@ -44,7 +70,7 @@ def _to_pynauty_graph(adj_dict: dict[int, list[int]], coloring: list[Any]) -> pn
     )
 
 
-def _canonical_map(
+def _canonical_map_pn(
     A: pn.Graph,
     B: pn.Graph,
 ) -> list[int]:

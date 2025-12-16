@@ -15,7 +15,7 @@ spuriously low RMSD values).
 """
 
 import itertools as it
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -25,7 +25,7 @@ from qcio import Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 
-from .connectivity_helpers import _canonical_map, _to_pynauty_graph
+from .connectivity_helpers import _canonical_map_pn, _to_pynauty_graph_adj_color
 from .geometry_kernels import _compute_rmsd, kabsch, qcp_rotation
 
 
@@ -115,7 +115,7 @@ def _setwise_stabilizer_on_C(
     """
     # Fix already assigned indices and stabilize component setwise
     colors = _component_partition(base_colors, P_opt, C)
-    G_c = _to_pynauty_graph(adj_dict, colors)
+    G_c = _to_pynauty_graph_adj_color(adj_dict, colors)
     gens, *_ = pn.autgrp(G_c)
     # Restrict to C
     local_gens = _restrict_global_generators_to_C(gens, C)
@@ -200,16 +200,13 @@ def _factor_backbone_and_pendants(
     backbone_indices = set(range(len(s1.symbols)))  # Initialize to all indices
     factored: dict[int | None, Component] = {}
 
-    # Build components: pendants first, then backbone. Sorting for deterministic output.
+    # Build components: pendants first, then backbone.
     for parent_idx, pendant_idxs in pendant_groups.items():
         if len(pendant_idxs) > 1:  # Multiple atoms in this pendant group
-            # Sorting by symbol for element-wise cross-structure pool matching
-            symbols = [s1.symbols[i] for i in pendant_idxs]
-            sorted_pairs = sorted(zip(symbols, pendant_idxs))
             component = Component(
                 parent_idx=parent_idx,
                 pool=True,
-                idxs=np.array([idx for _, idx in sorted_pairs]),
+                idxs=np.array(pendant_idxs),
             )
             factored[parent_idx] = component
             backbone_indices.difference_update(pendant_idxs)
@@ -272,6 +269,25 @@ def _aligned_rmsd_for_candidate(
     )
 
 
+def _match_pool_by_color(
+    A_C: np.ndarray,
+    B_pool: np.ndarray,
+    A_coloring: list[int],
+    B_coloring: list[int],
+) -> np.ndarray:
+    """Return B_pool indices aligned *positionally* to A_C by color."""
+    bins: dict[int, deque] = defaultdict(deque)  # color -> deque of indices in B_pool
+
+    for idx in B_pool:
+        bins[B_coloring[idx]].append(idx)
+
+    B_C = np.empty_like(A_C)
+    for i, a_idx in enumerate(A_C):
+        B_C[i] = bins[A_coloring[a_idx]].popleft()  # maintain order for convenience
+
+    return B_C
+
+
 def snap_rmsd_and_assignment(
     s1: Structure,
     s2: Structure,
@@ -331,21 +347,21 @@ def snap_rmsd_and_assignment(
     if not A_adj or not s2.adjacency_dict:
         raise ValueError("Structures lack connectivity information.")
 
-    A = _to_pynauty_graph(A_adj, s1.symbols)
-    B = _to_pynauty_graph(s2.adjacency_dict, s2.symbols)
+    A = _to_pynauty_graph_adj_color(A_adj, s1.symbols)
+    B = _to_pynauty_graph_adj_color(s2.adjacency_dict, s2.symbols)
 
     if not pn.isomorphic(A, B):
         raise ValueError("Structures not isomorphic. Same connectivity required.")
 
     # --- Canonical labels & initial map
-    M = np.array(_canonical_map(A, B), dtype=int)  # i_A -> i_B
+    M = np.array(_canonical_map_pn(A, B), dtype=int)  # i_A -> i_B
     P_opt = np.full(len(s1.symbols), -1, dtype=int)  # placeholder for final map
 
     # --- Compute automorphism group of A
     A_gens, A_mantissa, A_exponent, A_coloring, A_num_orbits = pn.autgrp(A)
     A_geom = s1.geometry  # Will not mutate s1.geometry
     B_geom = s2.geometry  # Will not mutate s2.geometry
-
+    B_coloring = list(np.array(A_coloring)[np.argsort(M)])  # coloring of B via M
     # --- 2. Factor batches ----------------------------------------------------------
     if isinstance(factor, str):
         if factor.lower() == "pendant":
@@ -373,17 +389,15 @@ def snap_rmsd_and_assignment(
             if p_idx is None or P_opt[p_idx] == M[p_idx]:  # Backbone component or parent not remapped  # fmt: skip
                 B_C = M[A_C]  # Initial canonical map still valid
             elif component.pool:  # Remapped pool pendant
-                # Currently implemented in factored ordering; need to change to dynamic mapping here
-                B_C = B_factored[P_opt[p_idx]].idxs
+                B_pool = B_factored[P_opt[p_idx]].idxs
+                B_C = _match_pool_by_color(A_C, B_pool, A_coloring, B_coloring)
             else:  # Remapped structured pendant
                 # Implement with nauty canonical maps on local subgraphs rooted at parent_idx
                 raise NotImplementedError(
                     "Remapped structured pendants not yet implemented."
                 )
 
-            for perm in _iter_component_permutations(
-                A_adj, A_coloring, P_opt, component
-            ):
+            for perm in _iter_component_permutations(A_adj, A_coloring, P_opt, component):  # fmt: skip
                 B_idx_perm = B_C[perm]
 
                 if align and (align_per_component or (b_idx == 0 and c_idx == 0)):

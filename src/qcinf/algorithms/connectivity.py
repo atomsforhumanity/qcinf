@@ -3,7 +3,7 @@ import pynauty as pn
 import qcconst.periodic_table as pt
 from qcio import Structure
 
-from .connectivity_helpers import _canonical_map, _to_pynauty_graph
+from .connectivity_helpers import _canonical_map_pn, _to_pynauty_graph_adj_color
 
 
 def determine_connectivity(
@@ -64,7 +64,7 @@ def canonical_ranks(structure: Structure, break_ties: bool = False) -> list[int]
     Returns:
         A list of canonical ranks corresponding to each atom in the structure.
     """
-    A = _to_pynauty_graph(structure.adjacency_dict, structure.symbols)
+    A = _to_pynauty_graph_adj_color(structure.adjacency_dict, structure.symbols)
     if break_ties:
         return pn.canon_label(A)
     else:
@@ -84,6 +84,6 @@ def canonical_map(
     Returns:
         A list of indices mapping atoms in struct_a to struct_b.
     """
-    A = _to_pynauty_graph(struct_a.adjacency_dict, struct_a.symbols)
-    B = _to_pynauty_graph(struct_b.adjacency_dict, struct_b.symbols)
-    return _canonical_map(A, B)
+    A = _to_pynauty_graph_adj_color(struct_a.adjacency_dict, struct_a.symbols)
+    B = _to_pynauty_graph_adj_color(struct_b.adjacency_dict, struct_b.symbols)
+    return _canonical_map_pn(A, B)
