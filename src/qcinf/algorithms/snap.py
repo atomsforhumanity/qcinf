@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 import numpy as np
+import numpy.typing as npt
 import pynauty as pn
 from qcio import Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
@@ -38,14 +39,21 @@ class Component:
             parent_idx means this is a backbone component.
         pool: Whether this component is a pool pendant (True) or non-pool pendant (False).
         idxs: The indices of the atoms in this component.
+        attachment_idx: The index within the component that attaches to the parent. None
+            for pool components (all are attached to the parent). Structured components,
+            such as a phenyl group, will specify which atom attaches to the parent.
+
     """
 
     parent_idx: int | None
     pool: bool
     idxs: np.ndarray
+    attachment_idx: int | None = None
 
 
 Batch = list[Component]
+ComponentLike = list[int]
+BatchLike = list[ComponentLike]
 
 
 def _component_partition(
@@ -162,93 +170,101 @@ def _iter_component_permutations(
         ).generate_schreier_sims(af=True)
 
 
-def _factor_backbone_and_pendants(
-    s1: Structure, depth: int = 1
-) -> dict[int | None, Component]:
-    """
-    Factor the structure into a backbone + pendant groups for each element.
+def _reduce_to_backbone(adj: dict[int, set[int]], backbone: set[int]) -> None:
+    """Remove all vertices not in backbone from adj in-place."""
+    to_remove = [v for v in adj.keys() if v not in backbone]
+    for v in to_remove:
+        # Remove v from its neighbors
+        for nbr in adj[v]:
+            adj[nbr].discard(v)
+        # Remove v itself
+        del adj[v]
 
-    For now just one layer and using a dictionary to group pendants by parent atom.
+
+def _peel_cyclic_pendants(
+    adj: dict[int, set[int]],
+) -> tuple[set[int], list[Component]]:
+    """Placeholder: extract structured cyclic pendant Components and mutate adj to remove them.
+
+    Future behavior (depth >= 2):
+      - compute 2-core on current adj
+      - find core components that are pendant-attached to the remainder
+      - expand each with attached trees that do not reach another core component
+      - emit Component(parent_idx=<attachment>, pool=False, idxs=<subgraph vertices>, attachment_idx=<in-component neighbor>)
+      - delete those vertices from adj
+    """
+    print("Warning: cyclic pendant peeling not yet implemented.")
+    return set(adj.keys()), []
+
+
+def _peel_pool_pendants(
+    adj: dict[int, set[int]],
+) -> tuple[set[int], list[Component]]:
+    """Peel sibling leaf groups (size>1). Returns (batch, removed_vertices).
 
     Parameters:
-        s1: The structure to factor.
-        depth: The depth of pendant groups to consider (default 1). 0 means no pendant
-            factoring (the whole structure will be considered backbone). 1 means singly
-            attached pendants with siblings, such as methyl and methylene hydrogens or
-            halogens, but atoms without siblings such as hydroxyl hydrogens, or phenyl
-            hydrogens will remain in the backbone. Depth 2 includes bi-connected
-            substituents such as phenyl rings (which contain internal symmetry) or
-            multiple identical substituents attached to the same parent atom (which
-            also contains symmetry), such as geminal diols (-C(OH)2) or other geminal
-            substituents. Depth > 2 recursively peels more layers of substituents until
-            the desired depth is reached or no further pendants exist.
+        adj: The adjacency dictionary of the structure graph.
 
     Returns:
-        Dictionary mapping parent_idx (or None for backbone) to Component.
+        A tuple of (parent_idxs, list[Component]).
     """
-    if depth == 0:
-        idxs = np.array(range(len(s1.symbols)))  # Whole structure as backbone
-        return {None: Component(parent_idx=None, pool=False, idxs=idxs)}
+    pools: dict[int, list[int]] = defaultdict(list)  # (parent_idx) -> list of atom indices  # fmt: skip
 
-    # Depth == 1: identify singly attached pendants
-    # Identify pendant groups
-    pendant_groups: dict[int, list[int]] = defaultdict(list)  # (parent_idx) -> list of atom indices  # fmt: skip
-    for atom_idx, nbrs in s1.adjacency_dict.items():
+    for atom_idx, nbrs in adj.items():
         if len(nbrs) == 1:  # Single attached pendant
-            pendant_groups[nbrs[0]].append(atom_idx)
+            pools[next(iter(nbrs))].append(atom_idx)
 
-    backbone_indices = set(range(len(s1.symbols)))  # Initialize to all indices
-    factored: dict[int | None, Component] = {}
+    backbone_indices = set(adj)  # Initialize to all indices
+    factored: list[Component] = []
 
-    # Build components: pendants first, then backbone.
-    for parent_idx, pendant_idxs in pendant_groups.items():
+    # Build components
+    for parent_idx, pendant_idxs in pools.items():
         if len(pendant_idxs) > 1:  # Multiple atoms in this pendant group
-            component = Component(
+            cmp = Component(
                 parent_idx=parent_idx,
                 pool=True,
-                idxs=np.array(pendant_idxs),
+                idxs=np.array(sorted(pendant_idxs)),
             )
-            factored[parent_idx] = component
+            factored.append(cmp)
             backbone_indices.difference_update(pendant_idxs)
 
-    # Add backbone component
-    factored[None] = Component(
-        parent_idx=None, pool=False, idxs=np.array(sorted(backbone_indices))
-    )
-    return factored
+    return backbone_indices, factored
 
 
-def _factored_to_batches(factored: dict[int | None, Component]) -> list[Batch]:
-    """
-    Convert the factored dictionary to batches.
+def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Batch]:
+    adj = {i: set(nbrs) for i, nbrs in adj_dict.items()}
+    reversed_batch: list[Batch] = []
 
-    Returns:
-        List of batches, where the first batch is the backbone and the subsequent batch
-            contains the pendant groups.
-    """
-    batches: list[list[Component]] = [[], []]
-    for parent_idx, component in factored.items():
-        if parent_idx is None:
-            batches[0].append(component)
-        else:
-            batches[1].append(component)
-    return batches
+    def _recur(depth: int) -> None:
+        nonlocal adj, reversed_batch
 
+        if depth == 0:
+            return
 
-def _align_fixed(
-    A: np.ndarray, B: np.ndarray, P_opt: np.ndarray, alignment_backend: str = "kabsch"
-) -> np.ndarray:
-    """Return a copy of A aligned to B using pairs (i -> P[i]) for i with fixed[i]."""
-    fixed = P_opt != -1
+        backbone_indices, factored_pools = _peel_pool_pendants(adj)
+        if factored_pools:
+            reversed_batch.append(factored_pools)
+            _reduce_to_backbone(adj, backbone_indices)
 
-    if alignment_backend == "kabsch":
-        R, cA, cB = kabsch(A[fixed], B[P_opt[fixed]])
-    elif alignment_backend == "qcp":
-        R, cA, cB = qcp_rotation(A[fixed], B[P_opt[fixed]])
-    else:
-        raise ValueError(f"Unknown alignment backend '{alignment_backend}'.")
+        backbone_indices, factored_pendants = _peel_cyclic_pendants(adj)
+        if factored_pendants:
+            reversed_batch.append(factored_pendants)
 
-    return (A - cA) @ R.T + cB  # align all of A
+        if factored_pools or factored_pendants:
+            _recur(depth - 1)
+
+    # Initial factoring of first pendant layer
+    backbone_indices, factored_pools = _peel_pool_pendants(adj)
+    if factored_pools:
+        reversed_batch.append(factored_pools)
+        _reduce_to_backbone(adj, backbone_indices)
+
+    _recur(depth - 1)
+
+    # Backbone is whatever remains after factoring
+    backbone_idxs = np.array(sorted(adj.keys()), dtype=int)
+    backbone = Component(parent_idx=None, pool=False, idxs=backbone_idxs)
+    return [[backbone], *reversed(reversed_batch)]
 
 
 def _aligned_rmsd_for_candidate(
@@ -267,6 +283,22 @@ def _aligned_rmsd_for_candidate(
     return _compute_rmsd(
         A_geom[A_fixed_plus_C], B_geom[B_fixed_plus_C], align=True, backend=backend
     )
+
+
+def _align_fixed(
+    A: np.ndarray, B: np.ndarray, P_opt: np.ndarray, alignment_backend: str = "kabsch"
+) -> np.ndarray:
+    """Return a copy of A aligned to B using pairs (i -> P[i]) for i with fixed[i]."""
+    fixed = P_opt != -1
+
+    if alignment_backend == "kabsch":
+        R, cA, cB = kabsch(A[fixed], B[P_opt[fixed]])
+    elif alignment_backend == "qcp":
+        R, cA, cB = qcp_rotation(A[fixed], B[P_opt[fixed]])
+    else:
+        raise ValueError(f"Unknown alignment backend '{alignment_backend}'.")
+
+    return (A - cA) @ R.T + cB  # align all of A
 
 
 def _match_pool_by_color(
@@ -288,15 +320,32 @@ def _match_pool_by_color(
     return B_C
 
 
+def _b_lookup(
+    batches: list[Batch], M: npt.NDArray[np.int64]
+) -> dict[tuple[int | None, bool], npt.NDArray[np.int64]]:
+    """Build lookup of B components by parent_idx using canonical map M."""
+    # (B_parent_idx, pool) -> indices in B
+    b_lookup: dict[tuple[int | None, bool], npt.NDArray[np.int64]] = {}
+    for component in it.chain.from_iterable(batches):
+        idxs = M[component.idxs]
+        if component.parent_idx is None:
+            key = (None, component.pool)
+        else:
+            key = (M[component.parent_idx], component.pool)
+        b_lookup[key] = idxs
+
+    return b_lookup
+
+
 def snap_rmsd_and_assignment(
     s1: Structure,
     s2: Structure,
     *,
-    align: bool = True,
-    align_per_component: bool = False,
-    factor: str | dict[int | None, Component] | None = "pendant",
     factor_depth: int = 1,
+    factoring: list[Batch] | None = None,
+    align: bool = True,
     alignment_backend: str = "kabsch",
+    align_per_component: bool = False,
 ) -> tuple[float, list[int]]:
     """
     Compute snapRMSD(s1→s2). Returns (rmsd, P) where P optimally maps s1 indices to s2 indices.
@@ -315,22 +364,36 @@ def snap_rmsd_and_assignment(
     Parameters:
         s1: First structure.
         s2: Second structure.
+
+        actor_depth: The depth of pendant groups to factor (default is 1). A depth of
+            1 factors only singly attached pendant groups such as methyl and methylene
+            hydrogens and halides. A depth of 2 would also factor their parents (e.g.,
+            factor the three methyl groups on a tert-butyl substituent) and factor
+            cyclic pendants such as phenyl rings. Higher depths are possible but
+            rarely useful. A depth of 0 turns off factoring (equivalent to a full graph
+            isomorphism approach). Ignored if a custom factoring is passed.
+        factoring: A custom structure factoring with indices correspond to s1. If a
+            factoring is provided users may provide a list[Batch] where each Batch is a
+            list of Components or a simplified list[BatchLike] where each component is a list
+            of atom indices. Factoring is grouped into batches to control algorithm
+            execution e.g., [ [[0,1,2]], [[3,4]], [[5,6], [7]]]. After each batch the
+            structures are realigned.
         align: Whether to align the structures before computing RMSD. Default is True.
             Generally one should only set this to False if the structures should be
             compared in their absolute orientations, e.g., from a crystal structure
             or docking pose.
+        alignment_backend: The backend to use for alignment calculations. Options are
+            `kabsch` (default) or `qcp`. `qcp` uses a numba accelerated implementation
+            of the QCP algorithm. `qcp` requires ~3s to compile on the first call and is
+            then cached. It won't need re-compilation across process restarts after that.
+            On subsequent process executions the first call will requires ~0.15 seconds
+            to load the function from cache. Subsequent calls are much faster than
+            `kabsch`. The break-even point where `qcp` becomes faster than `kabsch` is
+            usually around ~100-200 RMSD calculations depending on system size.
         align_per_component: Whether to realign the structures after each factored component
             is processed. Default is False meaning that realignment is only done after
-            each batch, except for the first batch which must align for each proposed component
-            to establish a common reference frame.
-        factor: May be a string specifying the built-in factoring method to use (default
-            "pendant"), None which turns off factoring (equivalent to a graph isomorphism
-            matching algorithm), or a custom structure factoring. If a factoring is
-            provided it is list[Batch] where each Batch is a list of components and
-            each component is a list of atom indices corresponding to s1, e.g.,
-            [[ [0,1,2], [3,4] ], [ [5,6], [7] ]].
-        factor_depth: The depth of pendant groups to consider (default is 1).
-
+            each batch, except for the first component which must align for each proposed
+            permutation to establish the initial common reference frame.
 
     Returns:
         (float, P_opt): The computed snapRMSD value and the optimal permutation as a
@@ -355,7 +418,7 @@ def snap_rmsd_and_assignment(
 
     # --- Canonical labels & initial map
     M = np.array(_canonical_map_pn(A, B), dtype=int)  # i_A -> i_B
-    P_opt = np.full(len(s1.symbols), -1, dtype=int)  # placeholder for final map
+    P_opt = np.full(len(s1.symbols), -1, dtype=int)
 
     # --- Compute automorphism group of A
     A_gens, A_mantissa, A_exponent, A_coloring, A_num_orbits = pn.autgrp(A)
@@ -363,19 +426,16 @@ def snap_rmsd_and_assignment(
     B_geom = s2.geometry  # Will not mutate s2.geometry
     B_coloring = list(np.array(A_coloring)[np.argsort(M)])  # coloring of B via M
     # --- 2. Factor batches ----------------------------------------------------------
-    if isinstance(factor, str):
-        if factor.lower() == "pendant":
-            A_factored = _factor_backbone_and_pendants(s1, depth=factor_depth)
-            B_factored = _factor_backbone_and_pendants(s2, depth=factor_depth)
-        else:
-            raise ValueError(f"Unknown factoring method '{factor}'.")
-    elif factor is None:
-        A_factored = _factor_backbone_and_pendants(s1, depth=0)
-        B_factored = _factor_backbone_and_pendants(s2, depth=0)
+    if factoring is not None:
+        # TODO: Possibly implement normalization for the simplified BatchLike format
+        batches = factoring
+    elif factor_depth == 0:  # Whole structure as backbone
+        idxs = np.array(range(len(s1.symbols)))
+        batches = [[Component(parent_idx=None, pool=False, idxs=idxs)]]
     else:
-        A_factored = factor
-    batches = _factored_to_batches(A_factored)  # ensure Batch format
-    # TODO: Need to factor B based on A using M.
+        batches = factor_plan_recursive(A_adj, depth=factor_depth)
+
+    B_lookup = _b_lookup(batches, M)
 
     # --- 3. Main control loop -----------------------------------------------------
     for b_idx, batch in enumerate(batches):
@@ -389,8 +449,8 @@ def snap_rmsd_and_assignment(
             if p_idx is None or P_opt[p_idx] == M[p_idx]:  # Backbone component or parent not remapped  # fmt: skip
                 B_C = M[A_C]  # Initial canonical map still valid
             elif component.pool:  # Remapped pool pendant
-                B_pool = B_factored[P_opt[p_idx]].idxs
-                B_C = _match_pool_by_color(A_C, B_pool, A_coloring, B_coloring)
+                B_idxs = B_lookup[P_opt[p_idx], component.pool]
+                B_C = _match_pool_by_color(A_C, B_idxs, A_coloring, B_coloring)
             else:  # Remapped structured pendant
                 # Implement with nauty canonical maps on local subgraphs rooted at parent_idx
                 raise NotImplementedError(
@@ -426,7 +486,7 @@ def snap_rmsd_and_assignment(
     assert all(v == 1 for v in Counter(P_opt).values()), "P_opt is not a valid permutation!"  # Sanity check while debugging # fmt: skip
     # Align false because already aligned at the end of the last batch if needed
     final_rmsd = _compute_rmsd(A_geom, B_geom[P_opt], align=False)
-    return float(final_rmsd), P_opt.tolist()
+    return final_rmsd, [int(x) for x in P_opt]
 
 
 def snap_rmsd(s1: Structure, s2: Structure, **kwargs) -> float:
