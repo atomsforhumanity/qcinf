@@ -17,7 +17,7 @@ spuriously low RMSD values).
 import itertools as it
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
 import numpy.typing as npt
@@ -39,16 +39,12 @@ class Component:
             parent_idx means this is a backbone component.
         pool: Whether this component is a pool pendant (True) or non-pool pendant (False).
         idxs: The indices of the atoms in this component.
-        attachment_idx: The index within the component that attaches to the parent. None
-            for pool components (all are attached to the parent). Structured components,
-            such as a phenyl group, will specify which atom attaches to the parent.
 
     """
 
     parent_idx: int | None
     pool: bool
     idxs: np.ndarray
-    attachment_idx: int | None = None
 
 
 Batch = list[Component]
@@ -337,16 +333,93 @@ def _b_lookup(
     return b_lookup
 
 
+def induced_local_adj(
+    adj: dict[int, list[int]], nodes: npt.NDArray[np.int64]
+) -> tuple[dict[int, list[int]], dict[int, int]]:
+    """
+    Construct the induced subgraph on `nodes` with a local 0..k-1 labeling.
+
+    Important ordering contract:
+        The local vertex indices are assigned *in the order of `nodes`*.
+        I.e., the first entry in `nodes` maps to local vertex 0, the second
+        entry maps to local vertex 1, and so on. This ordering is relied upon by
+        downstream logic in _match_structured_component to align the canonical
+        labeling maps.
+
+    Parameters:
+        adj: Global adjacency dictionary.
+        nodes: Array of global vertex IDs defining the induced subgraph.
+
+    Returns:
+        local_adj: Adjacency dictionary on local vertex IDs (0..k-1).
+        g2l: Mapping from global vertex ID -> local vertex ID.
+    """
+    nodes_i = [int(v) for v in nodes]  # nodes are np.int64
+    g2l = {v: i for i, v in enumerate(nodes_i)}
+    local_adj: dict[int, list[int]] = {}
+    for gv in nodes_i:
+        lv = g2l[gv]
+        local_adj[lv] = [g2l[gn] for gn in adj[gv] if gn in g2l]
+    return local_adj, g2l
+
+
+def _match_structured_component(
+    A_C: npt.NDArray[np.int64],
+    B_idxs: npt.NDArray[np.int64],
+    A_adj: dict[int, list[int]],
+    B_adj: dict[int, list[int]],
+    A_coloring: list[int],
+    B_coloring: list[int],
+) -> npt.NDArray[np.int64]:
+    """Return B indices aligned positionally to A_C using nauty on induced subgraphs.
+
+    Parameters:
+        A_C: The indices of the atoms in structure A's component.
+        B_idxs: The indices of the atoms in structure B's component.
+        A_adj: The adjacency dictionary of structure A.
+        B_adj: The adjacency dictionary of structure B.
+        A_coloring: The vertex coloring of structure A.
+        B_coloring: The vertex coloring of structure B.
+
+    Returns:
+        B_C: The indices of the atoms in structure B's component aligned positionally to A_C.
+    """
+    A_loc_colors = [A_coloring[int(v)] for v in A_C]
+    B_loc_colors = [B_coloring[int(v)] for v in B_idxs]
+
+    if Counter(A_loc_colors) != Counter(B_loc_colors):
+        raise ValueError("Structured component color histograms do not match. These components cannot be isomorphic.")  # pragma: no cover # fmt: skip
+
+    A_loc_adj, A_g2l = induced_local_adj(A_adj, A_C)
+    B_loc_adj, B_g2l = induced_local_adj(B_adj, B_idxs)
+
+    A_sub = _to_pynauty_graph_adj_color(A_loc_adj, A_loc_colors)
+    B_sub = _to_pynauty_graph_adj_color(B_loc_adj, B_loc_colors)
+
+    local_map = _canonical_map_pn(A_sub, B_sub)
+
+    B_C = np.empty_like(A_C)
+    for i, gvA in enumerate(A_C):
+        lvA = A_g2l[int(gvA)]
+        lvB = local_map[lvA]
+        B_C[i] = B_idxs[lvB]
+
+    return B_C
+
+
 def snap_rmsd_and_assignment(
     s1: Structure,
     s2: Structure,
     *,
     factor_depth: int = 1,
     factoring: list[Batch] | None = None,
+    s1_coloring: list[Any] | None = None,
+    s2_coloring: list[Any] | None = None,
     align: bool = True,
     alignment_backend: str = "kabsch",
     align_per_component: bool = False,
 ) -> tuple[float, list[int]]:
+    # TODO: Add compute_connectivity_if_missing parameter?
     """
     Compute snapRMSD(s1→s2). Returns (rmsd, P) where P optimally maps s1 indices to s2 indices.
 
@@ -378,6 +451,15 @@ def snap_rmsd_and_assignment(
             of atom indices. Factoring is grouped into batches to control algorithm
             execution e.g., [ [[0,1,2]], [[3,4]], [[5,6], [7]]]. After each batch the
             structures are realigned.
+        s1_coloring: Optional list of colors for each vertex in s1, e.g., [0,0,0,3,3,3]
+            indicates atoms 0-2 are of one color and atoms 3-5 are a second color.
+            If no value is provided the Structure's symbols array is used as the
+            default coloring. Coloring may be any hashable type such as str or int
+            and may contain any chemical information deemed relevant by the user.
+            E.g., hybridization states or partial charges could be encoded as 'Csp3' for
+            an atom's color. If no coloring is provided the Structure's symbols array
+            is used as the default coloring.
+        s2_coloring: Coloring for s2; same format as s1_coloring.
         align: Whether to align the structures before computing RMSD. Default is True.
             Generally one should only set this to False if the structures should be
             compared in their absolute orientations, e.g., from a crystal structure
@@ -406,12 +488,12 @@ def snap_rmsd_and_assignment(
     #   - Once for A to get automorphism group
 
     # --- Graphs & isomorphism check
-    A_adj = s1.adjacency_dict  # compute once since used multiple times
-    if not A_adj or not s2.adjacency_dict:
+    A_adj, B_adj = s1.adjacency_dict, s2.adjacency_dict
+    if not A_adj or not B_adj:
         raise ValueError("Structures lack connectivity information.")
 
-    A = _to_pynauty_graph_adj_color(A_adj, s1.symbols)
-    B = _to_pynauty_graph_adj_color(s2.adjacency_dict, s2.symbols)
+    A = _to_pynauty_graph_adj_color(A_adj, s1_coloring or s1.symbols)
+    B = _to_pynauty_graph_adj_color(B_adj, s2_coloring or s2.symbols)
 
     if not pn.isomorphic(A, B):
         raise ValueError("Structures not isomorphic. Same connectivity required.")
@@ -452,9 +534,8 @@ def snap_rmsd_and_assignment(
                 B_idxs = B_lookup[P_opt[p_idx], component.pool]
                 B_C = _match_pool_by_color(A_C, B_idxs, A_coloring, B_coloring)
             else:  # Remapped structured pendant
-                # Implement with nauty canonical maps on local subgraphs rooted at parent_idx
-                raise NotImplementedError(
-                    "Remapped structured pendants not yet implemented."
+                B_C = _match_structured_component(
+                    A_C, B_idxs, A_adj, B_adj, A_coloring, B_coloring
                 )
 
             for perm in _iter_component_permutations(A_adj, A_coloring, P_opt, component):  # fmt: skip
@@ -490,7 +571,7 @@ def snap_rmsd_and_assignment(
 
 
 def snap_rmsd(s1: Structure, s2: Structure, **kwargs) -> float:
-    """Thin convenience wrapper around :func:`srmsd_and_opt_assignment` to return only RMSD."""
+    """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only RMSD."""
     rmsd_val, _ = snap_rmsd_and_assignment(s1, s2, **kwargs)
     return rmsd_val
 
@@ -500,6 +581,6 @@ def snap_assignment(
     s2: Structure,
     **kwargs,
 ) -> list[int]:
-    """Thin convenience wrapper around :func:`srmsd_and_opt_assignment` to return only assignment."""
+    """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only assignment."""
     _, P_opt = snap_rmsd_and_assignment(s1, s2, **kwargs)
     return P_opt

@@ -46,7 +46,7 @@ def _to_pynauty_graph(struct: Structure, coloring: list[Any] | None = None) -> p
         # TODO: Add parameter `compute_connectivity_if_missing: bool = True`
         raise ValueError("Structure has no connectivity defined.")
 
-    return _to_pynauty_graph_adj_color(adj_dict, struct.symbols)
+    return _to_pynauty_graph_adj_color(adj_dict, coloring)
 
 
 def _to_pynauty_graph_adj_color(
@@ -57,8 +57,9 @@ def _to_pynauty_graph_adj_color(
 
     Parameters:
         adj_dict: Adjacency dictionary of the graph, e.g. {0: [1,2], 1: [0,3], ...}.
+            Numbering of vertices must be 0 to N-1 for N vertices.
         coloring: List of color IDs for each vertex, e.g., [0,0,0,3,3,3]
-            indicates atoms 0-2 are of one color and atoms 3-5 are a second color.
+            indicates vertices 0-2 are of one color and vertices 3-5 are a second color.
             Using the structure's symbols array can be used as a default coloring.
     Returns:
         The corresponding pynauty Graph.
