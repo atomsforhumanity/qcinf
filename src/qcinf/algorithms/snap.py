@@ -44,7 +44,7 @@ class Component:
 
     parent_idx: int | None
     pool: bool
-    idxs: np.ndarray
+    idxs: npt.NDArray[np.int64]
 
 
 Batch = list[Component]
@@ -53,7 +53,7 @@ BatchLike = list[ComponentLike]
 
 
 def _component_partition(
-    coloring: list[int], P_opt: np.ndarray, C: np.ndarray
+    coloring: list[int], P_opt: npt.NDArray[np.int64], C: npt.NDArray[np.int64]
 ) -> list[int]:
     """
     Start from base_colors (e.g., Nauty coloring). Encode:
@@ -79,7 +79,7 @@ def _component_partition(
 
 def _restrict_global_generators_to_C(
     gens_global: list[list[int]],
-    C: np.ndarray,
+    C: npt.NDArray[np.int64],
 ) -> list[Permutation]:
     """
     Restrict each global generator (array form on 0..n-1) to a k-point
@@ -103,8 +103,8 @@ def _restrict_global_generators_to_C(
 def _setwise_stabilizer_on_C(
     adj_dict: dict[int, list[int]],
     base_colors: list[int],
-    P_opt: np.ndarray,
-    C: np.ndarray,
+    P_opt: npt.NDArray[np.int64],
+    C: npt.NDArray[np.int64],
 ) -> PermutationGroup:
     """(Aut(G)_(fixed))_{C}↾C as a local SymPy group on |C| points.
 
@@ -129,7 +129,7 @@ def _setwise_stabilizer_on_C(
 def _iter_component_permutations(
     adj_dict: dict[int, list[int]],
     base_colors: list[int],
-    P_opt: np.ndarray,
+    P_opt: npt.NDArray[np.int64],
     component: Component,
 ) -> Iterable[list[int]]:
     """Aut(G)_{fixed}↾C as a local SymPy group on |C| points.
@@ -264,11 +264,11 @@ def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Ba
 
 
 def _aligned_rmsd_for_candidate(
-    A_geom: np.ndarray,
-    B_geom: np.ndarray,
-    P_opt: np.ndarray,
-    A_C: np.ndarray,
-    B_idx_perm: np.ndarray,
+    A_geom: npt.NDArray[np.float64],
+    B_geom: npt.NDArray[np.float64],
+    P_opt: npt.NDArray[np.int64],
+    A_C: npt.NDArray[np.int64],
+    B_idx_perm: npt.NDArray[np.int64],
     backend: str = "kabsch",
 ) -> float:
     """Compute RMSD after aligning A to B using fixed + component indices."""
@@ -438,7 +438,7 @@ def snap_rmsd_and_assignment(
         s1: First structure.
         s2: Second structure.
 
-        actor_depth: The depth of pendant groups to factor (default is 1). A depth of
+        factor_depth: The depth of pendant groups to factor (default is 1). A depth of
             1 factors only singly attached pendant groups such as methyl and methylene
             hydrogens and halides. A depth of 2 would also factor their parents (e.g.,
             factor the three methyl groups on a tert-butyl substituent) and factor
@@ -539,14 +539,14 @@ def snap_rmsd_and_assignment(
                 )
 
             for perm in _iter_component_permutations(A_adj, A_coloring, P_opt, component):  # fmt: skip
-                B_idx_perm = B_C[perm]
+                B_C_perm = B_C[perm]
 
                 if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
                     # Align per-candidate; use fixed + component indices
-                    score = _aligned_rmsd_for_candidate(A_geom, B_geom, P_opt, A_C,B_idx_perm, backend=alignment_backend)  # fmt: skip
+                    score = _aligned_rmsd_for_candidate(A_geom, B_geom, P_opt, A_C, B_C_perm, backend=alignment_backend)  # fmt: skip
                 else:
                     # No alignment; direct RMSD on component given established frame
-                    score = _compute_rmsd(A_geom[A_C], B_geom[B_idx_perm], align=False)
+                    score = _compute_rmsd(A_geom[A_C], B_geom[B_C_perm], align=False)
 
                 if score < best_rmsd:
                     best_rmsd = score
