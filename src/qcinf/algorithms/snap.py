@@ -51,124 +51,12 @@ Batch = list[Component]
 ComponentLike = list[int]
 BatchLike = list[ComponentLike]
 
-
-def _component_partition(
-    coloring: list[int], P_opt: npt.NDArray[np.int64], C: npt.NDArray[np.int64]
-) -> list[int]:
-    """
-    Start from base_colors (e.g., Nauty coloring). Encode:
-      - pointwise stabilizer of 'fixed' by promoting to singletons
-      - setwise stabilizer of C by splitting each color into (in-C) vs (out-of-C)
-    """
-    new_coloring = list(coloring)
-    next_id = max(new_coloring) + 1
-
-    # Promote fixed to unique colors (singletons)
-    for i, is_fixed in enumerate(P_opt != -1):
-        if is_fixed:
-            new_coloring[i] = next_id
-            next_id += 1
-
-    # Place component indices into their own color class by existing color
-    for idx in C:
-        # Magic number to offset in-C vs out-of-C
-        new_coloring[idx] = new_coloring[idx] - 1000000
-
-    return new_coloring
+## -- Factoring functions -------------------------------------------------------------
 
 
-def _restrict_global_generators_to_C(
-    gens_global: list[list[int]],
-    C: npt.NDArray[np.int64],
-) -> list[Permutation]:
-    """
-    Restrict each global generator (array form on 0..n-1) to a k-point
-    Permutation on C, deduplicated.
-    Assumes gens_global all preserve C setwise (enforced by the partition).
-    """
-    g_to_l = {v: i for i, v in enumerate(C)}  # global index -> local index
-    seen: set[tuple[int, ...]] = set()
-    local: list[Permutation] = []
-
-    for g in gens_global:
-        local_map = tuple(g_to_l[g[v]] for v in C)
-        if local_map not in seen:
-            seen.add(local_map)
-            local.append(Permutation(local_map))
-    if not local:  # Empty generators (trivial group)
-        local.append(Permutation(list(range(len(C)))))  # identity
-    return local
-
-
-def _setwise_stabilizer_on_C(
-    adj_dict: dict[int, list[int]],
-    base_colors: list[int],
-    P_opt: npt.NDArray[np.int64],
-    C: npt.NDArray[np.int64],
-) -> PermutationGroup:
-    """(Aut(G)_(fixed))_{C}↾C as a local SymPy group on |C| points.
-
-    This computes the setwise stabilizer of C within the pointwise stabilizer of
-    singletons restricted to the action on C.
-
-    Parameters:
-        adj_dict: The adjacency dictionary of the structure graph.
-        coloring: The vertex coloring (partition) for the whole structure.
-        P_opt: Partial mapping of structure indices; -1 means unfixed.
-        component: The list of indices in the current component.
-    """
-    # Fix already assigned indices and stabilize component setwise
-    colors = _component_partition(base_colors, P_opt, C)
-    G_c = _to_pynauty_graph_adj_color(adj_dict, colors)
-    gens, *_ = pn.autgrp(G_c)
-    # Restrict to C
-    local_gens = _restrict_global_generators_to_C(gens, C)
-    return PermutationGroup(*local_gens)
-
-
-def _iter_component_permutations(
-    adj_dict: dict[int, list[int]],
-    base_colors: list[int],
-    P_opt: npt.NDArray[np.int64],
-    component: Component,
-) -> Iterable[list[int]]:
-    """Aut(G)_{fixed}↾C as a local SymPy group on |C| points.
-
-    This computes the pointwise stabilizer of the fixed vertices restricted to
-    the action on C.
-
-    Parameters:
-        adj_dict: The adjacency dictionary of the structure graph.
-        coloring: The vertex coloring (partition) for the whole structure.
-        P_opt: Partial mapping of structure indices; -1 means unfixed.
-        component: The list of indices in the current component.
-
-    Returns:
-        An iterable of permutations (as lists) acting on the component indices
-        reindex to 0..|C|-1.
-    """
-    if component.pool:  # Direct permutations by element type
-        # Group by color (proxy for element types)
-        groups = defaultdict(list)
-        for i, c_idx in enumerate(component.idxs):
-            groups[base_colors[c_idx]].append(i)
-        # e.g., -CH2F -> [[0,1],[2]] -> permutations of [0,1] cross [2]
-        # which yields [[0,1,2], [1,0,2]] for the full component
-        return (
-            list(it.chain.from_iterable(combo))
-            for combo in it.product(
-                *(it.permutations(idxs) for idxs in groups.values())
-            )
-        )
-    else:  # Backbone or non-pool pendant: full setwise stabilizer
-        return _setwise_stabilizer_on_C(
-            adj_dict, base_colors, P_opt, component.idxs
-        ).generate_schreier_sims(af=True)
-
-
-def _reduce_to_backbone(adj: dict[int, set[int]], backbone: set[int]) -> None:
-    """Remove all vertices not in backbone from adj in-place."""
-    to_remove = [v for v in adj.keys() if v not in backbone]
+def _prune_graph(adj: dict[int, set[int]], keep: set[int]) -> None:
+    """Remove all vertices not in keep from adj in-place."""
+    to_remove = [v for v in adj.keys() if v not in keep]
     for v in to_remove:
         # Remove v from its neighbors
         for nbr in adj[v]:
@@ -210,7 +98,7 @@ def _peel_pool_pendants(
         if len(nbrs) == 1:  # Single attached pendant
             pools[next(iter(nbrs))].append(atom_idx)
 
-    backbone_indices = set(adj)  # Initialize to all indices
+    backbone_idx_set = set(adj)  # Initialize to all indices
     factored: list[Component] = []
 
     # Build components
@@ -222,9 +110,9 @@ def _peel_pool_pendants(
                 idxs=np.array(sorted(pendant_idxs)),
             )
             factored.append(cmp)
-            backbone_indices.difference_update(pendant_idxs)
+            backbone_idx_set.difference_update(pendant_idxs)
 
-    return backbone_indices, factored
+    return backbone_idx_set, factored
 
 
 def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Batch]:
@@ -240,7 +128,7 @@ def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Ba
         backbone_indices, factored_pools = _peel_pool_pendants(adj)
         if factored_pools:
             reversed_batch.append(factored_pools)
-            _reduce_to_backbone(adj, backbone_indices)
+            _prune_graph(adj, backbone_indices)
 
         backbone_indices, factored_pendants = _peel_cyclic_pendants(adj)
         if factored_pendants:
@@ -250,10 +138,10 @@ def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Ba
             _recur(depth - 1)
 
     # Initial factoring of first pendant layer
-    backbone_indices, factored_pools = _peel_pool_pendants(adj)
+    backbone_idxs, factored_pools = _peel_pool_pendants(adj)
     if factored_pools:
         reversed_batch.append(factored_pools)
-        _reduce_to_backbone(adj, backbone_indices)
+        _prune_graph(adj, backbone_idxs)
 
     _recur(depth - 1)
 
@@ -263,6 +151,174 @@ def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Ba
     return [[backbone], *reversed(reversed_batch)]
 
 
+## -- Helper functions -------------------------------------------------------------
+def _induced_local_adj(
+    adj: dict[int, list[int]], nodes: npt.NDArray[np.int64]
+) -> tuple[dict[int, list[int]], dict[int, int]]:
+    """
+    Construct the induced subgraph on `nodes` with a local 0..k-1 labeling.
+
+    Important ordering contract:
+        The local vertex indices are assigned *in the order of `nodes`*.
+        I.e., the first entry in `nodes` maps to local vertex 0, the second
+        entry maps to local vertex 1, and so on. This ordering is relied upon by
+        downstream logic in _match_structured_component to align the canonical
+        labeling maps.
+
+    Parameters:
+        adj: Global adjacency dictionary.
+        nodes: Array of global vertex IDs defining the induced subgraph.
+
+    Returns:
+        local_adj: Adjacency dictionary on local vertex IDs (0..k-1).
+        g2l: Mapping from global vertex ID -> local vertex ID.
+    """
+    nodes_i = [int(v) for v in nodes]  # nodes are np.int64
+    g2l = {v: i for i, v in enumerate(nodes_i)}
+    local_adj: dict[int, list[int]] = {}
+    for gv in nodes_i:
+        lv = g2l[gv]
+        local_adj[lv] = [g2l[gn] for gn in adj[gv] if gn in g2l]
+    return local_adj, g2l
+
+
+def _build_B_comp_lookup(
+    batches: list[Batch], M: npt.NDArray[np.int64]
+) -> dict[tuple[int | None, bool], npt.NDArray[np.int64]]:
+    """Build lookup of B components by parent_idx using canonical map M."""
+    # (B_parent_idx, pool) -> indices in B
+    b_lookup: dict[tuple[int | None, bool], npt.NDArray[np.int64]] = {}
+    for component in it.chain.from_iterable(batches):
+        idxs = M[component.idxs]
+        is_pool = component.pool
+        if component.parent_idx is None:
+            parent = (None, is_pool)
+        else:
+            parent = (M[component.parent_idx], is_pool)
+        b_lookup[parent] = idxs
+
+    return b_lookup
+
+
+def _match_pool_component(
+    A_C: np.ndarray,
+    B_pool: np.ndarray,
+    A_orbit_ids: list[int],
+    B_orbit_ids: list[int],
+) -> np.ndarray:
+    """Return B_pool indices aligned *positionally* to A_C by orbit id."""
+    bins: dict[int, deque] = defaultdict(deque)  # orbit id -> deque of indices in B_pool  # fmt: skip
+
+    for idx in B_pool:
+        bins[B_orbit_ids[idx]].append(idx)
+
+    B_C = np.empty_like(A_C)
+    for i, a_idx in enumerate(A_C):
+        B_C[i] = bins[A_orbit_ids[a_idx]].popleft()  # maintain order for convenience
+
+    return B_C
+
+
+def _match_structured_component(
+    A_C: npt.NDArray[np.int64],
+    B_idxs: npt.NDArray[np.int64],
+    A_adj: dict[int, list[int]],
+    B_adj: dict[int, list[int]],
+    A_orbit_ids: list[int],
+    B_orbit_ids: list[int],
+) -> npt.NDArray[np.int64]:
+    """Return B indices aligned positionally to A_C using nauty on induced subgraphs.
+
+    Parameters:
+        A_C: The indices of the atoms in structure A's component.
+        B_idxs: The indices of the atoms in structure B's component.
+        A_adj: The adjacency dictionary of structure A.
+        B_adj: The adjacency dictionary of structure B.
+        A_orbit_ids: The global orbit ids for structure A.
+        B_orbit_ids: The global orbit ids for structure B.
+
+    Returns:
+        B_C: The indices of the atoms in structure B's component aligned positionally to A_C.
+    """
+    A_loc_orbit_ids = [A_orbit_ids[int(v)] for v in A_C]
+    B_loc_orbit_ids = [B_orbit_ids[int(v)] for v in B_idxs]
+
+    if Counter(A_loc_orbit_ids) != Counter(B_loc_orbit_ids):
+        raise ValueError("Structured component orbit id histograms do not match. These components cannot be isomorphic.")  # pragma: no cover # fmt: skip
+
+    A_loc_adj, A_g2l = _induced_local_adj(A_adj, A_C)
+    B_loc_adj, B_g2l = _induced_local_adj(B_adj, B_idxs)
+
+    A_sub = _to_pynauty_graph_adj_color(A_loc_adj, A_loc_orbit_ids)
+    B_sub = _to_pynauty_graph_adj_color(B_loc_adj, B_loc_orbit_ids)
+
+    local_map = _canonical_map_pn(A_sub, B_sub)
+
+    B_C = np.empty_like(A_C)
+    for i, gvA in enumerate(A_C):
+        lvA = A_g2l[int(gvA)]
+        lvB = local_map[lvA]
+        B_C[i] = B_idxs[lvB]
+
+    return B_C
+
+
+## -- Local automorphism group computation ------------------------------------------------
+def _component_autogroup(
+    adj_dict: dict[int, list[int]],
+    orbit_ids: list[int],
+    C: npt.NDArray[np.int64],
+) -> PermutationGroup:
+    """Compute the local automorphism group acting on component C (0..|C|-1)"""
+    # Build induced subgraph with local 0..k-1 indexing
+    local_adj, _ = _induced_local_adj(adj_dict, C)
+
+    # Restrict global orbit ids to this component (in C order)
+    loc_orbit_ids = [orbit_ids[int(v)] for v in C]
+
+    G_sub = _to_pynauty_graph_adj_color(local_adj, loc_orbit_ids)
+    gens_local, *_ = pn.autgrp(G_sub)  # generators already on 0..k-1
+    if not gens_local:
+        return PermutationGroup(Permutation(list(range(len(C)))))  # Identity only
+    return PermutationGroup(*(Permutation(g) for g in gens_local))
+
+
+def _iter_component_perms(
+    adj_dict: dict[int, list[int]],
+    orbit_ids: list[int],
+    component: Component,
+) -> Iterable[list[int]]:
+    """Compute the component's local automorphism group consistent with global orbit labels.
+
+    Parameters:
+        adj_dict: The adjacency dictionary of the structure graph.
+        orbit_ids: The orbit ids for the whole structure.
+        component: The list of indices in the current component.
+
+    Returns:
+        An iterable of permutations (as lists) acting on the component indices
+        reindex to 0..|C|-1.
+    """
+    if component.pool:  # Direct permutations by element type
+        # Group by orbit id (proxy for element types)
+        groups = defaultdict(list)
+        for i, c_idx in enumerate(component.idxs):
+            groups[orbit_ids[c_idx]].append(i)
+        # e.g., -CH2F -> [[0,1],[2]] -> permutations of [0,1] cross [2]
+        # which yields [[0,1,2], [1,0,2]] for the full component
+        return (
+            list(it.chain.from_iterable(combo))
+            for combo in it.product(
+                *(it.permutations(idxs) for idxs in groups.values())
+            )
+        )
+    else:  # Backbone or non-pool pendant
+        return _component_autogroup(
+            adj_dict, orbit_ids, component.idxs
+        ).generate_schreier_sims(af=True)
+
+
+## -- Alignment helpers -------------------------------------------------------------
 def _aligned_rmsd_for_candidate(
     A_geom: npt.NDArray[np.float64],
     B_geom: npt.NDArray[np.float64],
@@ -297,147 +353,37 @@ def _align_fixed(
     return (A - cA) @ R.T + cB  # align all of A
 
 
-def _match_pool_by_color(
-    A_C: np.ndarray,
-    B_pool: np.ndarray,
-    A_coloring: list[int],
-    B_coloring: list[int],
-) -> np.ndarray:
-    """Return B_pool indices aligned *positionally* to A_C by color."""
-    bins: dict[int, deque] = defaultdict(deque)  # color -> deque of indices in B_pool
-
-    for idx in B_pool:
-        bins[B_coloring[idx]].append(idx)
-
-    B_C = np.empty_like(A_C)
-    for i, a_idx in enumerate(A_C):
-        B_C[i] = bins[A_coloring[a_idx]].popleft()  # maintain order for convenience
-
-    return B_C
-
-
-def _b_lookup(
-    batches: list[Batch], M: npt.NDArray[np.int64]
-) -> dict[tuple[int | None, bool], npt.NDArray[np.int64]]:
-    """Build lookup of B components by parent_idx using canonical map M."""
-    # (B_parent_idx, pool) -> indices in B
-    b_lookup: dict[tuple[int | None, bool], npt.NDArray[np.int64]] = {}
-    for component in it.chain.from_iterable(batches):
-        idxs = M[component.idxs]
-        if component.parent_idx is None:
-            key = (None, component.pool)
-        else:
-            key = (M[component.parent_idx], component.pool)
-        b_lookup[key] = idxs
-
-    return b_lookup
-
-
-def induced_local_adj(
-    adj: dict[int, list[int]], nodes: npt.NDArray[np.int64]
-) -> tuple[dict[int, list[int]], dict[int, int]]:
-    """
-    Construct the induced subgraph on `nodes` with a local 0..k-1 labeling.
-
-    Important ordering contract:
-        The local vertex indices are assigned *in the order of `nodes`*.
-        I.e., the first entry in `nodes` maps to local vertex 0, the second
-        entry maps to local vertex 1, and so on. This ordering is relied upon by
-        downstream logic in _match_structured_component to align the canonical
-        labeling maps.
-
-    Parameters:
-        adj: Global adjacency dictionary.
-        nodes: Array of global vertex IDs defining the induced subgraph.
-
-    Returns:
-        local_adj: Adjacency dictionary on local vertex IDs (0..k-1).
-        g2l: Mapping from global vertex ID -> local vertex ID.
-    """
-    nodes_i = [int(v) for v in nodes]  # nodes are np.int64
-    g2l = {v: i for i, v in enumerate(nodes_i)}
-    local_adj: dict[int, list[int]] = {}
-    for gv in nodes_i:
-        lv = g2l[gv]
-        local_adj[lv] = [g2l[gn] for gn in adj[gv] if gn in g2l]
-    return local_adj, g2l
-
-
-def _match_structured_component(
-    A_C: npt.NDArray[np.int64],
-    B_idxs: npt.NDArray[np.int64],
-    A_adj: dict[int, list[int]],
-    B_adj: dict[int, list[int]],
-    A_coloring: list[int],
-    B_coloring: list[int],
-) -> npt.NDArray[np.int64]:
-    """Return B indices aligned positionally to A_C using nauty on induced subgraphs.
-
-    Parameters:
-        A_C: The indices of the atoms in structure A's component.
-        B_idxs: The indices of the atoms in structure B's component.
-        A_adj: The adjacency dictionary of structure A.
-        B_adj: The adjacency dictionary of structure B.
-        A_coloring: The vertex coloring of structure A.
-        B_coloring: The vertex coloring of structure B.
-
-    Returns:
-        B_C: The indices of the atoms in structure B's component aligned positionally to A_C.
-    """
-    A_loc_colors = [A_coloring[int(v)] for v in A_C]
-    B_loc_colors = [B_coloring[int(v)] for v in B_idxs]
-
-    if Counter(A_loc_colors) != Counter(B_loc_colors):
-        raise ValueError("Structured component color histograms do not match. These components cannot be isomorphic.")  # pragma: no cover # fmt: skip
-
-    A_loc_adj, A_g2l = induced_local_adj(A_adj, A_C)
-    B_loc_adj, B_g2l = induced_local_adj(B_adj, B_idxs)
-
-    A_sub = _to_pynauty_graph_adj_color(A_loc_adj, A_loc_colors)
-    B_sub = _to_pynauty_graph_adj_color(B_loc_adj, B_loc_colors)
-
-    local_map = _canonical_map_pn(A_sub, B_sub)
-
-    B_C = np.empty_like(A_C)
-    for i, gvA in enumerate(A_C):
-        lvA = A_g2l[int(gvA)]
-        lvB = local_map[lvA]
-        B_C[i] = B_idxs[lvB]
-
-    return B_C
-
-
-def snap_rmsd_and_assignment(
-    s1: Structure,
-    s2: Structure,
+# -- Public API ---------------------------------------------------------------------
+def snap_rmsd_align_and_assign(
+    a_struct: Structure,
+    b_struct: Structure,
     *,
     factor_depth: int = 1,
     factoring: list[Batch] | None = None,
-    s1_coloring: list[Any] | None = None,
-    s2_coloring: list[Any] | None = None,
+    a_coloring: list[Any] | None = None,
+    b_coloring: list[Any] | None = None,
     align: bool = True,
     alignment_backend: str = "kabsch",
     align_per_component: bool = False,
-) -> tuple[float, list[int]]:
+) -> tuple[float, Structure, list[int]]:
     # TODO: Add compute_connectivity_if_missing parameter?
     """
-    Compute snapRMSD(s1→s2). Returns (rmsd, P) where P optimally maps s1 indices to s2 indices.
+    Compute snapRMSD(A_struct → B_struct). Returns (rmsd, P) where P optimally maps
+    A_struct indices to B_struct indices.
 
     Strategy:
-      - Build graphs; require isomorphism.
-      - Initialize global map P from canonical labels (M).
+      - Compute canonical label map, compute automorphism group for global orbit ids
       - For each batch:
           * For each component C:
-              · Build local setwise stabilizer (given 'fixed')
-              · Score candidates WITHOUT mutating P (zero-copy indices)
-              · Lock-in winner: P[C] = base_C[best_perm]
-          * After batch, optionally align entire G1 to G2 using (P, fixed)
-      - Final RMSD on aligned coordinates (or raw if align=False).
+              · Build build component automorphism group using global orbit ids
+              · Score candidate permutations for each component
+              · Lock-in winner
+          * After batch, optionally align a_struct to b_struct using (P, fixed)
+      - Final RMSD on optimally assigned coordinates
 
     Parameters:
-        s1: First structure.
-        s2: Second structure.
-
+        A_struct: First structure.
+        B_struct: Second structure.
         factor_depth: The depth of pendant groups to factor (default is 1). A depth of
             1 factors only singly attached pendant groups such as methyl and methylene
             hydrogens and halides. A depth of 2 would also factor their parents (e.g.,
@@ -445,13 +391,13 @@ def snap_rmsd_and_assignment(
             cyclic pendants such as phenyl rings. Higher depths are possible but
             rarely useful. A depth of 0 turns off factoring (equivalent to a full graph
             isomorphism approach). Ignored if a custom factoring is passed.
-        factoring: A custom structure factoring with indices correspond to s1. If a
+        factoring: A custom structure factoring with indices correspond to a_struct. If a
             factoring is provided users may provide a list[Batch] where each Batch is a
             list of Components or a simplified list[BatchLike] where each component is a list
             of atom indices. Factoring is grouped into batches to control algorithm
             execution e.g., [ [[0,1,2]], [[3,4]], [[5,6], [7]]]. After each batch the
             structures are realigned.
-        s1_coloring: Optional list of colors for each vertex in s1, e.g., [0,0,0,3,3,3]
+        a_coloring: Optional list of colors for each vertex in a, e.g., [0,0,0,3,3,3]
             indicates atoms 0-2 are of one color and atoms 3-5 are a second color.
             If no value is provided the Structure's symbols array is used as the
             default coloring. Coloring may be any hashable type such as str or int
@@ -459,7 +405,7 @@ def snap_rmsd_and_assignment(
             E.g., hybridization states or partial charges could be encoded as 'Csp3' for
             an atom's color. If no coloring is provided the Structure's symbols array
             is used as the default coloring.
-        s2_coloring: Coloring for s2; same format as s1_coloring.
+        b_coloring: Coloring for b_struct; same format as a_coloring.
         align: Whether to align the structures before computing RMSD. Default is True.
             Generally one should only set this to False if the structures should be
             compared in their absolute orientations, e.g., from a crystal structure
@@ -478,8 +424,8 @@ def snap_rmsd_and_assignment(
             permutation to establish the initial common reference frame.
 
     Returns:
-        (float, P_opt): The computed snapRMSD value and the optimal permutation as a
-            list of indices for s1 onto s2.
+        (float, a_aligned, P_opt): The computed snapRMSD value, an aligned a_struct, and the
+            optimal permutation as a list of indices for a_struct onto b_struct.
     """
     # --- 1. Build graphs, canonical label map, compute automorphism group -----------
     # NOTE: Currently running nauty 3x on A and 2x on B. Can optimize?
@@ -488,36 +434,36 @@ def snap_rmsd_and_assignment(
     #   - Once for A to get automorphism group
 
     # --- Graphs & isomorphism check
-    A_adj, B_adj = s1.adjacency_dict, s2.adjacency_dict
+    A_adj, B_adj = a_struct.adjacency_dict, b_struct.adjacency_dict
     if not A_adj or not B_adj:
         raise ValueError("Structures lack connectivity information.")
 
-    A = _to_pynauty_graph_adj_color(A_adj, s1_coloring or s1.symbols)
-    B = _to_pynauty_graph_adj_color(B_adj, s2_coloring or s2.symbols)
+    A = _to_pynauty_graph_adj_color(A_adj, a_coloring or a_struct.symbols)
+    B = _to_pynauty_graph_adj_color(B_adj, b_coloring or b_struct.symbols)
 
     if not pn.isomorphic(A, B):
         raise ValueError("Structures not isomorphic. Same connectivity required.")
 
     # --- Canonical labels & initial map
     M = np.array(_canonical_map_pn(A, B), dtype=int)  # i_A -> i_B
-    P_opt = np.full(len(s1.symbols), -1, dtype=int)
+    P_opt = np.full(len(a_struct.symbols), -1, dtype=int)
 
     # --- Compute automorphism group of A
-    A_gens, A_mantissa, A_exponent, A_coloring, A_num_orbits = pn.autgrp(A)
-    A_geom = s1.geometry  # Will not mutate s1.geometry
-    B_geom = s2.geometry  # Will not mutate s2.geometry
-    B_coloring = list(np.array(A_coloring)[np.argsort(M)])  # coloring of B via M
+    A_gens, A_mantissa, A_exponent, A_orbit_ids, A_orbit_count = pn.autgrp(A)
+    A_geom = a_struct.geometry  # Will not mutate a.geometry
+    B_geom = b_struct.geometry  # Will not mutate b_struct.geometry
+    B_orbit_ids = list(np.array(A_orbit_ids)[np.argsort(M)])  # orbit ids for B via M
     # --- 2. Factor batches ----------------------------------------------------------
     if factoring is not None:
         # TODO: Possibly implement normalization for the simplified BatchLike format
         batches = factoring
     elif factor_depth == 0:  # Whole structure as backbone
-        idxs = np.array(range(len(s1.symbols)))
+        idxs = np.array(range(len(a_struct.symbols)))
         batches = [[Component(parent_idx=None, pool=False, idxs=idxs)]]
     else:
         batches = factor_plan_recursive(A_adj, depth=factor_depth)
 
-    B_lookup = _b_lookup(batches, M)
+    B_C_by_parent = _build_B_comp_lookup(batches, M)
 
     # --- 3. Main control loop -----------------------------------------------------
     for b_idx, batch in enumerate(batches):
@@ -531,14 +477,13 @@ def snap_rmsd_and_assignment(
             if p_idx is None or P_opt[p_idx] == M[p_idx]:  # Backbone component or parent not remapped  # fmt: skip
                 B_C = M[A_C]  # Initial canonical map still valid
             elif component.pool:  # Remapped pool pendant
-                B_idxs = B_lookup[P_opt[p_idx], component.pool]
-                B_C = _match_pool_by_color(A_C, B_idxs, A_coloring, B_coloring)
+                B_idxs = B_C_by_parent[P_opt[p_idx], component.pool]
+                B_C = _match_pool_component(A_C, B_idxs, A_orbit_ids, B_orbit_ids)
             else:  # Remapped structured pendant
-                B_C = _match_structured_component(
-                    A_C, B_idxs, A_adj, B_adj, A_coloring, B_coloring
-                )
+                B_idxs = B_C_by_parent[P_opt[p_idx], component.pool]
+                B_C = _match_structured_component(A_C, B_idxs, A_adj, B_adj, A_orbit_ids, B_orbit_ids)  # fmt: skip
 
-            for perm in _iter_component_permutations(A_adj, A_coloring, P_opt, component):  # fmt: skip
+            for perm in _iter_component_perms(A_adj, A_orbit_ids, component):
                 B_C_perm = B_C[perm]
 
                 if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
@@ -546,11 +491,10 @@ def snap_rmsd_and_assignment(
                     score = _aligned_rmsd_for_candidate(A_geom, B_geom, P_opt, A_C, B_C_perm, backend=alignment_backend)  # fmt: skip
                 else:
                     # No alignment; direct RMSD on component given established frame
-                    score = _compute_rmsd(A_geom[A_C], B_geom[B_C_perm], align=False)
+                    score = _compute_rmsd(A_geom[A_C], B_geom[B_C_perm], align=False)  # fmt: skip
 
                 if score < best_rmsd:
-                    best_rmsd = score
-                    best_perm = perm
+                    best_rmsd, best_perm = score, perm
 
             # Lock-in best permutation for this component
             P_opt[A_C] = B_C[best_perm]
@@ -567,20 +511,32 @@ def snap_rmsd_and_assignment(
     assert all(v == 1 for v in Counter(P_opt).values()), "P_opt is not a valid permutation!"  # Sanity check while debugging # fmt: skip
     # Align false because already aligned at the end of the last batch if needed
     final_rmsd = _compute_rmsd(A_geom, B_geom[P_opt], align=False)
-    return final_rmsd, [int(x) for x in P_opt]
+    # Create aligned a Structure
+    a_aligned = a_struct.model_copy(update={"geometry": A_geom}, deep=True)
+    return final_rmsd, a_aligned, [int(x) for x in P_opt]
 
 
-def snap_rmsd(s1: Structure, s2: Structure, **kwargs) -> float:
+def snap_rmsd(a_struct: Structure, b_struct: Structure, **kwargs) -> float:
     """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only RMSD."""
-    rmsd_val, _ = snap_rmsd_and_assignment(s1, s2, **kwargs)
+    rmsd_val, _, _ = snap_rmsd_align_and_assign(a_struct, b_struct, **kwargs)
     return rmsd_val
 
 
-def snap_assignment(
-    s1: Structure,
-    s2: Structure,
+def snap_align(
+    a_struct: Structure,
+    b_struct: Structure,
+    **kwargs,
+) -> Structure:
+    """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only aligned Structure."""  # fmt: skip
+    _, a_aligned, _ = snap_rmsd_align_and_assign(a_struct, b_struct, **kwargs)
+    return a_aligned
+
+
+def snap_assign(
+    a_struct: Structure,
+    b_struct: Structure,
     **kwargs,
 ) -> list[int]:
     """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only assignment."""
-    _, P_opt = snap_rmsd_and_assignment(s1, s2, **kwargs)
+    _, _, P_opt = snap_rmsd_align_and_assign(a_struct, b_struct, **kwargs)
     return P_opt

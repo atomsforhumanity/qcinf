@@ -87,7 +87,7 @@ def test_induced_local_adj_respects_nodes_ordering_contract() -> None:
     }
 
     nodes = np.array([3, 1, 4], dtype=np.int64)  # local order: 3->0, 1->1, 4->2
-    local_adj, g2l = snap.induced_local_adj(adj, nodes)
+    local_adj, g2l = snap._induced_local_adj(adj, nodes)
 
     assert g2l == {3: 0, 1: 1, 4: 2}
 
