@@ -13,6 +13,7 @@ dependencies = [
     "numpy>=1.24.0",
     "sympy>=1.14.0",
     "pynauty>=2.8.8.1",
+    "rustworkx>=0.17.1",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

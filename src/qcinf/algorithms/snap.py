@@ -14,6 +14,7 @@ respect connectivity (which the Hungarian approach regularly violates to produce
 spuriously low RMSD values).
 """
 
+import copy
 import itertools as it
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from typing import Any, Iterable
 import numpy as np
 import numpy.typing as npt
 import pynauty as pn
+import rustworkx as rx
 from qcio import Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
@@ -65,22 +67,6 @@ def _prune_graph(adj: dict[int, set[int]], keep: set[int]) -> None:
         del adj[v]
 
 
-def _peel_cyclic_pendants(
-    adj: dict[int, set[int]],
-) -> tuple[set[int], list[Component]]:
-    """Placeholder: extract structured cyclic pendant Components and mutate adj to remove them.
-
-    Future behavior (depth >= 2):
-      - compute 2-core on current adj
-      - find core components that are pendant-attached to the remainder
-      - expand each with attached trees that do not reach another core component
-      - emit Component(parent_idx=<attachment>, pool=False, idxs=<subgraph vertices>, attachment_idx=<in-component neighbor>)
-      - delete those vertices from adj
-    """
-    print("Warning: cyclic pendant peeling not yet implemented.")
-    return set(adj.keys()), []
-
-
 def _peel_pool_pendants(
     adj: dict[int, set[int]],
 ) -> tuple[set[int], list[Component]]:
@@ -115,6 +101,313 @@ def _peel_pool_pendants(
     return backbone_idx_set, factored
 
 
+# ----------------------------
+# Helpers
+# ----------------------------
+
+
+def _rx_graph_from_adj(adj: dict[int, set[int]]) -> rx.PyGraph:
+    """
+    Build an undirected rustworkx PyGraph where:
+
+    - Node payload == original vertex id
+    - Node index == rustworkx internal index (opaque)
+    - Edges are added once (undirected)
+
+    You retrieve original ids later via g[node_index].
+    """
+    g = rx.PyGraph(multigraph=False)
+    adj2rx = {v: g.add_node(v) for v in adj}  # original id -> rx node index
+
+    for v, nbrs in adj.items():
+        rv = adj2rx[v]
+        for nbr in nbrs:
+            rn = adj2rx[nbr]
+            if rv < rn:  # add each undirected edge once
+                g.add_edge(rv, rn, None)
+    return g
+
+
+def _cycles(adj: dict[int, set[int]]) -> list[set[int]]:
+    """
+    Return cycle as sets of vertex ids (keys of adj).
+
+    A "cycle" is a connected component of the subgraph consisting only of
+    non-bridge edges (edges that lie on at least one cycle).
+    """
+
+    def _edge_key(u: int, v: int) -> tuple[int, int]:
+        return (u, v) if u < v else (v, u)
+
+    def _has_cycle(g_cycle: rx.PyGraph, comp: set[int]) -> bool:
+        """
+        Determine if the component has at least one cycle. Required due to rustworkx bug.
+        https://github.com/Qiskit/rustworkx/issues/1534
+        """
+        n = len(comp)
+        if n < 2:
+            return False
+
+        m = 0
+        for u, v in g_cycle.edge_list():
+            if u in comp and v in comp:
+                m += 1
+
+        return m >= n
+
+    # Build rustworkx graph + find bridges
+    g = _rx_graph_from_adj(adj)
+    bridges = {_edge_key(*edge) for edge in rx.bridges(g)}
+
+    # Build graph with only non-bridge edges (i.e., cycle edges)
+    g_cycle = rx.PyGraph(multigraph=False)
+    g_cycle.add_nodes_from(range(g.num_nodes()))  # same indices as g
+
+    for u, v in g.edge_list():  # u,v are rx indices
+        if _edge_key(u, v) not in bridges:
+            g_cycle.add_edge(u, v, None)
+
+    # Compute connected components of g_cycle (only cycles)
+    cycles: list[set[int]] = []
+    for cycle in rx.connected_components(g_cycle):
+        # >= 2 should work but due to a bug in rustworkx which omits the first edge as a bridge (if it correctly is one) we use >= 3. https://github.com/Qiskit/rustworkx/issues/1534  # fmt: skip
+        # if len(cycle) >= 3:
+        # Logically the above if statement should be sufficient, but due to the rustworkx bug we add an explicit cycle check
+        if _has_cycle(g_cycle, cycle):
+            cycles.append({g[i] for i in cycle})  # translate back to original ids
+
+    return cycles
+
+
+def _outside_components(adj: dict[int, set[int]], excluded: set[int]) -> list[set[int]]:
+    """
+    Connected components of the induced subgraph on outside vertices (V \\ excluded).
+    """
+    _adj = copy.deepcopy(adj)
+    keep = set(adj) - excluded
+    _prune_graph(_adj, keep)
+    g = _rx_graph_from_adj(_adj)
+    return [{g[i] for i in comp} for comp in rx.connected_components(g)]
+
+
+def _absorb_components(
+    adj: dict[int, set[int]],
+    cycles: list[set[int]],
+    outside_components: list[set[int]],
+) -> tuple[list[set[int]], list[set[int]]]:
+    """
+    Absorb outside connected-components into cycles when they "single-touch" exactly one cycle.
+
+    Definition:
+      - An outside component C "touches" a cycle blob S if there exists an edge (u, v)
+        with u in C and v in S.
+      - If C touches exactly one cycle blob, absorb C into that cycle blob.
+
+    Returns:
+      (new_cycles, remaining_outside_components)
+
+    Notes:
+      - Assumes cycles are disjoint sets of vertices.
+      - All indices are in the original adj indexing.
+    """
+    # Map vertex -> cycle index for O(1) membership queries
+    v2cidx: dict[int, int] = {}
+    for cidx, cyc in enumerate(cycles):
+        for v in cyc:
+            v2cidx[v] = cidx
+
+    # Make a new copy of cycles
+    new_cycles = [set(cyc) for cyc in cycles]
+    remaining: list[set[int]] = []
+
+    for comp in outside_components:
+        touched: set[int] = set()
+
+        # Determine which cycle blobs this component touches
+        for u in comp:
+            for nbr in adj[u]:
+                cidx = v2cidx.get(nbr)
+                if cidx is not None:
+                    touched.add(cidx)
+                    # Small early exit: if it touches >1, we won't absorb
+                    if len(touched) > 1:
+                        break
+            if len(touched) > 1:
+                break
+
+        if len(touched) == 1:
+            (cidx,) = tuple(touched)
+            # Absorb: union vertices into that cycle blob
+            new_cycles[cidx].update(comp)
+        else:
+            # Keep: touches 0 cycles, or touches >1 cycles
+            remaining.append(comp)
+
+    return new_cycles, remaining
+
+
+def _determine_backbone_and_factor_cycles(
+    adj: dict[int, set[int]],
+    cycles: list[set[int]],
+    remaining: list[set[int]],
+) -> tuple[set[int], list[Component]]:
+    """
+    Determine a backbone vertex-set and factor pendant ring-systems ("cycle blobs") into Components.
+
+    Definitions
+    ----------
+    - V = set(adj.keys())
+    - cycles: list of disjoint vertex-sets, each a "cycle blob" (fused/spiro ring-system).
+              These blobs are assumed to already include any absorbed *non-cyclic* substituents
+              you want treated as part of the ring substituent layer (i.e., "cycle + its substituents").
+    - remaining: connected components of:
+          V \\ union(cycles)
+      i.e., ALL vertices not belonging to any cycle blob, partitioned into CCs.
+
+    - Outside-neighbor (boundary) of a blob S:
+        ∂(S) = { v in V\\S : exists u in S with (u,v) in E }.
+
+    Goal / heuristic
+    ----------------
+    We want a clean "rooted" factoring where *factored* cycle blobs attach to the backbone
+    by exactly one outside contact that lies in the final backbone set.
+
+    Algorithm
+    ---------
+    Pass 0: Precompute boundary contacts for each cycle blob:
+        boundary[i] = ∂(cycles[i])
+
+    Pass 1a (size seed): Let R = union(remaining) (non-cycle remainder).
+        If R is non-empty and the largest cycle blob is larger than R, absorb that largest cycle
+        into the backbone seed. (Macrocycle-backbone case.)
+
+        This is a *single* absorption (largest-by-size). After absorption, no other cycle can be
+        larger than the backbone seed (since it was the largest cycle).
+
+    Pass 1b: Define backbone seed B as:
+        B = R  U (optional absorbed-largest-cycle) U union_{i : |boundary[i]| != 1} cycles[i]
+
+      Intuition:
+        - all non-cyclic remainder is backbone by default
+        - plus optional "largest macrocycle" if it dominates the remainder
+        - |∂| = 0   : freestanding ring fragment => not pendant => backbone
+        - |∂| > 1   : embedded / connective ring => not pendant => backbone
+
+    Pass 2: For each cycle blob with |∂| = 1, let its unique outside neighbor be p.
+        - If p ∈ B: factor this blob as Component(parent_idx=p)
+        - Else: do NOT factor; absorb into backbone
+                (prevents biphenyl-like A—B where each sees only the other as its unique outside contact)
+
+      Factored blobs are merged by shared parent_idx to handle multiple rings off the same parent.
+
+    Returns
+    -------
+    backbone_idx_set: set[int]
+        All vertex ids considered backbone after absorption decisions.
+    components: list[Component]
+        Factored pendant cycle Components (pool=False), merged by parent_idx.
+    """
+    if not adj:
+        return set(), []
+
+    # ---- Pass 0: boundaries ----
+    boundaries: list[set[int]] = []
+    for cyc in cycles:
+        b: set[int] = set()
+        for v in cyc:
+            for nbr in adj[v]:
+                if nbr not in cyc:
+                    b.add(nbr)
+        boundaries.append(b)
+
+    # ---- Pass 1: backbone seed from remainder ----
+    backbone: set[int] = set()
+    for r in remaining:
+        backbone |= r  # R = union(remaining)
+
+    # Pass 1a: size-seed macrocycle-backbone case
+    # If the largest cycle dominates the remainder, treat it as part of backbone.
+    if cycles:
+        max_i = max(range(len(cycles)), key=lambda i: len(cycles[i]))
+        largest = cycles[max_i]
+        if backbone:
+            # Normal case: compare against non-cyclic remainder size
+            if len(largest) > len(backbone):
+                backbone |= largest
+        else:
+            # Purely cyclic graph (no remainder): seed only if dominant macrocycle exists
+            if len(cycles) == 1:
+                backbone |= largest
+            else:
+                # Compute 2nd largest size without sorting whole list
+                second = max(len(cycles[i]) for i in range(len(cycles)) if i != max_i)
+                if len(largest) > second:
+                    backbone |= largest
+
+    # Pass 1b: absorb all cycles with |∂| != 1
+    for cyc, b in zip(cycles, boundaries):
+        if len(b) != 1:
+            backbone |= cyc
+
+    # Freeze the backbone anchor AFTER Pass 1 decisions
+    backbone_anchor = set(backbone)
+
+    # ---- Pass 2: factor pendant cycles whose unique outside contact is in backbone ----
+    parent2idxs: defaultdict[int, set[int]] = defaultdict(set)
+
+    for cyc, b in zip(cycles, boundaries):
+        if len(b) != 1:
+            continue  # already absorbed in pass 1b (or will be in backbone anyway)
+
+        parent = next(iter(b))
+        if parent in backbone_anchor:
+            parent2idxs[parent].update(cyc)
+        else:
+            # Unique outside contact is not in backbone => "ring-to-ring" only (biphenyl-like)
+            # or other non-rooted situation; absorb it.
+            backbone |= cyc
+
+    components: list[Component] = [
+        Component(
+            parent_idx=parent,
+            pool=False,
+            idxs=np.array(sorted(idxs), dtype=np.int64),
+        )
+        for parent, idxs in parent2idxs.items()
+    ]
+
+    return backbone, components
+
+
+# ----------------------------
+# Public: peel cyclic pendants
+# ----------------------------
+
+
+def _peel_cyclic_substituents(
+    adj: dict[int, set[int]],
+) -> tuple[set[int], list[Component]]:
+    """
+    Peel cyclic pendant components from the graph.
+
+    Returns:
+      backbone_vertex_ids, list[Components] (cycles with their substituents)
+    """
+    # 1: cycle blobs
+    cycles = _cycles(adj)
+
+    # 2: outside CCs
+    outside_ccs = _outside_components(adj, {v for cyc in cycles for v in cyc})
+
+    # 3: Absorb components into cycle blobs
+    full_cycles, remaining_outside_ccs = _absorb_components(adj, cycles, outside_ccs)
+
+    # 4: Determine backbone and factor cycle components
+    return _determine_backbone_and_factor_cycles(
+        adj, full_cycles, remaining_outside_ccs
+    )
+
+
 def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Batch]:
     adj = {i: set(nbrs) for i, nbrs in adj_dict.items()}
     reversed_batch: list[Batch] = []
@@ -125,16 +418,24 @@ def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Ba
         if depth == 0:
             return
 
-        backbone_indices, factored_pools = _peel_pool_pendants(adj)
+        to_append = []
+        backbone_idxs, factored_pools = _peel_pool_pendants(adj)
         if factored_pools:
-            reversed_batch.append(factored_pools)
-            _prune_graph(adj, backbone_indices)
+            to_append.extend(factored_pools)
+            _prune_graph(adj, backbone_idxs)
 
-        backbone_indices, factored_pendants = _peel_cyclic_pendants(adj)
-        if factored_pendants:
-            reversed_batch.append(factored_pendants)
+        backbone_idxs, factored_cycles = _peel_cyclic_substituents(adj)
+        if factored_cycles:
+            to_append.extend(factored_cycles)
+            _prune_graph(adj, backbone_idxs)
 
-        if factored_pools or factored_pendants:
+        backbone_idxs, factored_subs = _peel_substituents(adj)
+        if factored_subs:
+            to_append.extend(factored_subs)
+            _prune_graph(adj, backbone_idxs)
+
+        if to_append:
+            reversed_batch.append(to_append)
             _recur(depth - 1)
 
     # Initial factoring of first pendant layer
@@ -354,7 +655,7 @@ def _align_fixed(
 
 
 # -- Public API ---------------------------------------------------------------------
-def snap_rmsd_align_and_assign(
+def snap_rmsd_align_assign(
     a_struct: Structure,
     b_struct: Structure,
     *,
@@ -368,8 +669,7 @@ def snap_rmsd_align_and_assign(
 ) -> tuple[float, Structure, list[int]]:
     # TODO: Add compute_connectivity_if_missing parameter?
     """
-    Compute snapRMSD(A_struct → B_struct). Returns (rmsd, P) where P optimally maps
-    A_struct indices to B_struct indices.
+    Compute snapRMSD(A_struct → B_struct). Returns (rmsd, a_aligned, P_opt).
 
     Strategy:
       - Compute canonical label map, compute automorphism group for global orbit ids
@@ -452,7 +752,11 @@ def snap_rmsd_align_and_assign(
     A_gens, A_mantissa, A_exponent, A_orbit_ids, A_orbit_count = pn.autgrp(A)
     A_geom = a_struct.geometry  # Will not mutate a.geometry
     B_geom = b_struct.geometry  # Will not mutate b_struct.geometry
-    B_orbit_ids = list(np.array(A_orbit_ids)[np.argsort(M)])  # orbit ids for B via M
+    # orbit ids for B via M
+    B_orbit_ids = [0] * len(A_orbit_ids)
+    for iA, iB in enumerate(M):
+        B_orbit_ids[iB] = A_orbit_ids[iA]
+
     # --- 2. Factor batches ----------------------------------------------------------
     if factoring is not None:
         # TODO: Possibly implement normalization for the simplified BatchLike format
@@ -518,7 +822,7 @@ def snap_rmsd_align_and_assign(
 
 def snap_rmsd(a_struct: Structure, b_struct: Structure, **kwargs) -> float:
     """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only RMSD."""
-    rmsd_val, _, _ = snap_rmsd_align_and_assign(a_struct, b_struct, **kwargs)
+    rmsd_val, _, _ = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
     return rmsd_val
 
 
@@ -528,8 +832,18 @@ def snap_align(
     **kwargs,
 ) -> Structure:
     """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only aligned Structure."""  # fmt: skip
-    _, a_aligned, _ = snap_rmsd_align_and_assign(a_struct, b_struct, **kwargs)
+    _, a_aligned, _ = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
     return a_aligned
+
+
+def snap_rmsd_align(
+    a_struct: Structure,
+    b_struct: Structure,
+    **kwargs,
+) -> Structure:
+    """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return RMSD and aligned Structure."""  # fmt: skip
+    rmsd, a_aligned, _ = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
+    return rmsd, a_aligned
 
 
 def snap_assign(
@@ -538,5 +852,5 @@ def snap_assign(
     **kwargs,
 ) -> list[int]:
     """Thin convenience wrapper around :func:`snap_rmsd_and_opt_assignment` to return only assignment."""
-    _, _, P_opt = snap_rmsd_align_and_assign(a_struct, b_struct, **kwargs)
+    _, _, P_opt = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
     return P_opt

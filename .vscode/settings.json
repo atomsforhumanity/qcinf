@@ -5,6 +5,7 @@
         "atomicnum",
         "calccharges",
         "Cheminformatics",
+        "cidx",
         "ETKDG",
         "filterwarnings",
         "ghemical",
@@ -24,6 +25,7 @@
         "refmol",
         "refstruct",
         "rmsd",
+        "substituents",
         "swigvarlink",
         "triu",
         "Waals"
