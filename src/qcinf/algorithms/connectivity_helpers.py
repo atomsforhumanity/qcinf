@@ -1,3 +1,5 @@
+import hashlib
+import struct
 from collections import defaultdict
 from typing import Any
 
@@ -87,3 +89,87 @@ def _canonical_map_pn(
     for i_canon, i_orig1 in enumerate(canA):
         invA[i_orig1] = i_canon
     return [canB[invA[i_orig1]] for i_orig1 in range(len(canA))]
+
+
+def _get_branch_info(
+    adj: dict[int, set[int]],
+    parent: int,
+    root: int,
+    color: list[int],
+) -> tuple[set[int], bytes]:
+    """
+    Compute (branch_vertices, rooted AHU signature) for the branch hanging off `parent`
+    through neighbor `root`.
+
+    This is intended to be called on the *full remaining graph* adjacency (not just the branch).
+    We restrict traversal to the branch component by forbidding traversal into `parent`.
+
+    The rooted signature is AHU-style for rooted colored trees:
+        sig(v) = H( color[v], multiset(sig(children)) )
+    with the tree rooted at `root` (away from `parent`).
+
+    Notes:
+      - Uses global `color` labels directly (e.g., orbit IDs or packed labels).
+      - Safe for deep trees: iterative traversal, no recursion.
+      - Robust to accidental non-tree structure: uses `visited` to avoid revisits.
+        (If cycles exist, the signature is no longer a canonical GI-invariant, but the
+         traversal will not blow up.)
+
+    Parameters:
+        adj: Adjacency dict for the current remaining graph.
+        parent: The attachment vertex to forbid (the high-degree parent off which this branch hangs).
+        root: The neighbor of `parent` that is the entrypoint into this branch.
+        color: Global per-vertex labels used as node colors.
+
+    Returns:
+        branch_vertices, root_signature
+            branch_vertices is the vertex set of the connected component containing `root` in
+        G \\ {parent}. root_signature is a deterministic 16-byte digest.
+    """
+    # Discovery: build parent pointers + DFS order, restricted to the branch component.
+    visited: set[int] = set()
+    parent_of: dict[int, int] = {root: -1}
+    order: list[int] = []
+
+    stack: list[tuple[int, int]] = [(root, -1)]  # (node, parent_in_rooted_tree)
+
+    while stack:
+        v, p = stack.pop()
+        if v == parent:
+            continue
+        if v in visited:
+            continue
+        visited.add(v)
+        parent_of[v] = p
+        order.append(v)
+
+        for nbr in adj[v]:
+            if nbr == parent:
+                continue
+            if nbr == p:
+                continue
+            if nbr in visited:
+                continue
+            stack.append((nbr, v))
+
+    # Build children lists for bottom-up AHU hashing.
+    children_map: dict[int, list[int]] = {v: [] for v in visited}
+    for v, p in parent_of.items():
+        if p != -1:
+            children_map[p].append(v)
+
+    # Bottom-up hashing in reverse DFS order.
+    node_to_sig: dict[int, bytes] = {}
+
+    for v in reversed(order):
+        child_sigs = [node_to_sig[c] for c in children_map[v]]
+        child_sigs.sort()
+
+        h = hashlib.blake2b(digest_size=16)
+        h.update(struct.pack("<q", int(color[v])))
+        for cs in child_sigs:
+            h.update(cs)
+
+        node_to_sig[v] = h.digest()
+
+    return visited, node_to_sig[root]

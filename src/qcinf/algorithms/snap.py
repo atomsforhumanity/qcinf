@@ -28,7 +28,11 @@ from qcio import Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 
-from .connectivity_helpers import _canonical_map_pn, _to_pynauty_graph_adj_color
+from .connectivity_helpers import (
+    _canonical_map_pn,
+    _get_branch_info,
+    _to_pynauty_graph_adj_color,
+)
 from .geometry_kernels import _compute_rmsd, kabsch, qcp_rotation
 
 
@@ -226,7 +230,7 @@ def _absorb_components(
         # Determine which cycle blobs this component touches
         for u in comp:
             for nbr in adj[u]:
-                cidx = v2cidx.get(nbr)
+                cidx = v2cidx.get(nbr)  # type: ignore
                 if cidx is not None:
                     touched.add(cidx)
                     # Small early exit: if it touches >1, we won't absorb
@@ -408,7 +412,72 @@ def _peel_cyclic_substituents(
     )
 
 
-def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Batch]:
+def _peel_substituents(adj, *, color):
+    """
+    Peel repeated rooted isomorphic substituent branches off high-degree (>=4) vertices.
+
+    Assumptions:
+      - This is called on the "remaining" graph after cycle-related factoring has happened.
+      - Branches considered here are acyclic (tree-like) in practice.
+
+    Guardrails:
+      - Only consider parents with degree >= 4.
+      - Only consider branches with > 1 vertex (so we don't steal leaf pooling work).
+      - Parent-local rollback: if peeling ALL factorable groups at a parent would leave the
+        parent with <2 remaining neighbors, peel NOTHING at that parent (avoid arbitrary
+        backbone choice on ambiguous small graphs like CCC(O)(O)CC).
+
+    Returns:
+      backbone_idx_set: vertices left after peeling
+      components: list of non-pool Components representing peeled unions
+    """
+    backbone_idx_set = set(adj.keys())
+    components = []
+
+    for parent, nbrs in adj.items():
+        if len(nbrs) < 4:
+            continue
+
+        # Map signature -> list of (vertex_set)
+        sig2branches = defaultdict(list)
+
+        for root in nbrs:
+            # Single pass to get both the set of nodes and the tree signature
+            verts, sig = _get_branch_info(adj, parent, root, color)
+            if len(verts) > 1:  # Single node branches handled by peel pool pendants
+                sig2branches[sig].append(verts)
+
+        # Filter for groups that actually have duplicates
+        peel_candidates = [
+            v_list for v_list in sig2branches.values() if len(v_list) >= 2
+        ]
+        if not peel_candidates:
+            continue
+
+        # If peeling all groups would leave parent with <2 remaining neighbors,
+        # peel NOTHING at this parent (avoid arbitrary backbone choice).
+        all_peeled_nodes = {
+            v for group in peel_candidates for v_set in group for v in v_set
+        }
+        remaining_deg = sum(1 for nbr in nbrs if nbr not in all_peeled_nodes)
+
+        if remaining_deg >= 2:
+            for v_list in peel_candidates:
+                union = set().union(*v_list)
+                components.append(
+                    Component(
+                        parent_idx=parent,
+                        pool=False,
+                        idxs=np.array(sorted(union), dtype=np.int64),
+                    )
+                )
+                backbone_idx_set -= union
+    return backbone_idx_set, components
+
+
+def factor_plan_recursive(
+    adj_dict: dict[int, list[int]], *, depth: int, color: list[int]
+) -> list[Batch]:
     adj = {i: set(nbrs) for i, nbrs in adj_dict.items()}
     reversed_batch: list[Batch] = []
 
@@ -429,7 +498,7 @@ def factor_plan_recursive(adj_dict: dict[int, list[int]], depth: int) -> list[Ba
             to_append.extend(factored_cycles)
             _prune_graph(adj, backbone_idxs)
 
-        backbone_idxs, factored_subs = _peel_substituents(adj)
+        backbone_idxs, factored_subs = _peel_substituents(adj, color=color)
         if factored_subs:
             to_append.extend(factored_subs)
             _prune_graph(adj, backbone_idxs)
@@ -750,7 +819,7 @@ def snap_rmsd_align_assign(
 
     # --- Compute automorphism group of A
     A_gens, A_mantissa, A_exponent, A_orbit_ids, A_orbit_count = pn.autgrp(A)
-    A_geom = a_struct.geometry  # Will not mutate a.geometry
+    A_geom = a_struct.geometry  # Will not mutate a_struct.geometry
     B_geom = b_struct.geometry  # Will not mutate b_struct.geometry
     # orbit ids for B via M
     B_orbit_ids = [0] * len(A_orbit_ids)
@@ -765,7 +834,7 @@ def snap_rmsd_align_assign(
         idxs = np.array(range(len(a_struct.symbols)))
         batches = [[Component(parent_idx=None, pool=False, idxs=idxs)]]
     else:
-        batches = factor_plan_recursive(A_adj, depth=factor_depth)
+        batches = factor_plan_recursive(A_adj, depth=factor_depth, color=A_orbit_ids)
 
     B_C_by_parent = _build_B_comp_lookup(batches, M)
 

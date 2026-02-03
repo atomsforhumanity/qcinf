@@ -28,6 +28,7 @@
         "substituents",
         "swigvarlink",
         "triu",
+        "verts",
         "Waals"
     ]
 }
