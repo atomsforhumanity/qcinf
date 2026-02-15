@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 import pynauty as pn
 import qcconst.periodic_table as pt
@@ -54,22 +56,61 @@ def determine_connectivity(
     return connectivity
 
 
-def canonical_ranks(structure: Structure, break_ties: bool = False) -> list[int]:
+def canonical_ranks(structure: "Structure", break_ties: bool = False) -> list[int]:
     """Compute canonical ranks of atoms in a structure using NAUTY.
 
     Args:
         structure: The Structure for which to compute canonical ranks.
-        break_ties: Whether to break ties in ranks using a deterministic method.
-            Default is False.
+        break_ties: Whether to break ties or leave atoms in the same symmetry class with
+            the same rank.
+            - break_ties=False (default): Returns a *symmetry-class rank* per original atom
+            index (0..k-1), where atoms in the same graph-automorphism orbit share the same
+            rank. Ranks are assigned deterministically by sorting orbits primarily by
+            (atomic number, -orbit size), and secondarily by a canonical-label-based tie-breaker
+            so results are stable across arbitrary input atom orderings.
+            - break_ties=True: Returns a *total-order rank* per original atom index (0..n-1), corresponding
+          to each atom's position in NAUTY's canonical labeling (orig -> canon).
+
     Returns:
-        A list of canonical ranks corresponding to each atom in the structure.
+        List[int]: ranks aligned to original atom indices.
     """
     A = _to_pynauty_graph_adj_color(structure.adjacency_dict, structure.symbols)
+
+    # Canonical labeling: can[i_canon] = i_orig  (canon -> orig)
+    can = pn.canon_label(A)
+    # Invert to get inv[i_orig] = i_canon  (orig -> canon)
+    inv = [0] * len(can)
+    for i_canon, i_orig in enumerate(can):
+        inv[i_orig] = i_canon
+
     if break_ties:
-        return pn.canon_label(A)
-    else:
-        A_gens, A_mantissa, A_exponent, A_coloring, A_num_orbits = pn.autgrp(A)
-        return A_coloring
+        # Total-order rank per original atom index: position in canonical labeling.
+        return inv
+
+    # Otherwise: orbit / symmetry-class ranks.
+    *_, A_coloring, _ = pn.autgrp(A)
+
+    # Group vertices by orbit label (coloring label).
+    orbit_to_verts: dict[int, list[int]] = defaultdict(list)
+    for i, lab in enumerate(A_coloring):
+        orbit_to_verts[lab].append(i)
+
+    def orbit_key(lab: int) -> tuple[int, int, int]:
+        verts = orbit_to_verts[lab]
+        sym = structure.symbols[verts[0]]  # valid if initial coloring is by element
+        size = len(verts)
+        # Canonical tie-breaker: earliest canonical index among members of this orbit.
+        tie = min(inv[v] for v in verts)
+        # element primary, larger orbit first, then stable canonical tie-break
+        return (getattr(pt, sym).number, -size, tie)
+
+    ordered_orbits = sorted(orbit_to_verts.keys(), key=orbit_key)
+
+    # Map orbit label -> compact rank 0..k-1
+    lut = {lab: r for r, lab in enumerate(ordered_orbits)}
+
+    # Return per-atom ranks aligned to original indices.
+    return [lut[lab] for lab in A_coloring]
 
 
 def canonical_map(
