@@ -28,6 +28,7 @@ from qcio import Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 
+from .connectivity import adjacency_dict
 from .connectivity_helpers import (
     _canonical_map_pn,
     _get_branch_info,
@@ -362,6 +363,9 @@ def _determine_backbone_and_factor_cycles(
     for cyc, b in zip(cycles, boundaries):
         if len(b) != 1:
             continue  # already absorbed in pass 1b (or will be in backbone anyway)
+        if cyc <= backbone_anchor:
+            # Cycle was already absorbed into backbone in pass 1a/1b; do not refactor it.
+            continue
 
         parent = next(iter(b))
         if parent in backbone_anchor:
@@ -504,6 +508,7 @@ def factor_plan_recursive(
             _prune_graph(adj, backbone_idxs)
 
         if to_append:
+            to_append.reverse()  # Subs, Cycles, then pools
             reversed_batch.append(to_append)
             _recur(depth - 1)
 
@@ -723,6 +728,22 @@ def _align_fixed(
     return (A - cA) @ R.T + cB  # align all of A
 
 
+def _validate_factoring(batches: list[Batch]) -> None:
+    """Validate that the provided factoring is well-formed."""
+    seen_idxs = set(batches[0][0].idxs)  # Start with backbone indices
+    # Ensure parent is fixed before child and no duplicate indices
+    for batch in batches:
+        for component in batch:
+            if component.parent_idx is None:
+                continue  # Backbone component, no parent
+            if component.parent_idx not in seen_idxs:
+                raise ValueError(f"Component with parent_idx={component.parent_idx} appears before its parent in the factored batches.")  # fmt: skip
+            for idx in component.idxs:
+                if idx in seen_idxs:
+                    raise ValueError(f"Duplicate index {idx} found in factored components.")  # fmt: skip
+                seen_idxs.add(idx)
+
+
 # -- Public API ---------------------------------------------------------------------
 def snap_rmsd_align_assign(
     a_struct: Structure,
@@ -739,6 +760,9 @@ def snap_rmsd_align_assign(
     # TODO: Add compute_connectivity_if_missing parameter?
     """
     Compute snapRMSD(A_struct → B_struct). Returns (rmsd, a_aligned, P_opt).
+
+    If connectivity for the structures is not already present, it will be computed using covalent radii heuristics.
+    The structures must have the same connectivity to be compared.
 
     Strategy:
       - Compute canonical label map, compute automorphism group for global orbit ids
@@ -803,9 +827,9 @@ def snap_rmsd_align_assign(
     #   - Once for A to get automorphism group
 
     # --- Graphs & isomorphism check
-    A_adj, B_adj = a_struct.adjacency_dict, b_struct.adjacency_dict
+    A_adj, B_adj = adjacency_dict(a_struct), adjacency_dict(b_struct)
     if not A_adj or not B_adj:
-        raise ValueError("Structures lack connectivity information.")
+        raise ValueError("Structures have no bonded connectivity.")
 
     A = _to_pynauty_graph_adj_color(A_adj, a_coloring or a_struct.symbols)
     B = _to_pynauty_graph_adj_color(B_adj, b_coloring or b_struct.symbols)
@@ -836,6 +860,7 @@ def snap_rmsd_align_assign(
     else:
         batches = factor_plan_recursive(A_adj, depth=factor_depth, color=A_orbit_ids)
 
+    _validate_factoring(batches)
     B_C_by_parent = _build_B_comp_lookup(batches, M)
 
     # --- 3. Main control loop -----------------------------------------------------

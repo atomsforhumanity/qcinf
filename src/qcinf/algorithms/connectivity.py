@@ -56,6 +56,30 @@ def determine_connectivity(
     return connectivity
 
 
+def adjacency_dict(
+    structure: Structure, *, cov_factor: float = 1.2
+) -> dict[int, list[int]]:
+    """Return an adjacency dictionary, inferring connectivity if missing.
+
+    Args:
+        structure: The Structure to convert.
+        cov_factor: Scaling factor used only when connectivity must be inferred.
+
+    Returns:
+        Adjacency dictionary where each key maps to bonded neighbors.
+    """
+    if structure.connectivity:
+        return structure.adjacency_dict
+
+    connectivity = determine_connectivity(structure, cov_factor=cov_factor)
+    adjacency: dict[int, list[int]] = defaultdict(list)
+    for i, j, _ in connectivity:
+        adjacency[i].append(j)
+        adjacency[j].append(i)
+
+    return dict(adjacency)
+
+
 def canonical_ranks(structure: "Structure", break_ties: bool = False) -> list[int]:
     """Compute canonical ranks of atoms in a structure using NAUTY.
 
