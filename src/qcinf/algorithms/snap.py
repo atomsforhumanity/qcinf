@@ -4,8 +4,8 @@ snap.py — Symmetry-aware RMSD (snapRMSD)
 This module implements the snapRMSD algorithm: a symmetry-aware RMSD metric
 designed to correctly handle molecular symmetries and conformational diversity while
 remaining extremely fast; a trifecta not available via exist graph isomorphism or
-Hungarian approaches. The core idea is to *factor* the molecule into a backbone and
-pendant components, align on the backbone, and then align components sequentially
+Hungarian approaches. The core idea is to *factor* the molecule into a core and
+pendant components, align on the core, and then align components sequentially
 consistent with each pendant component's local automorphism group while respecting the
 global symmetry of the molecule. This approach allows snapRMSD to efficiently explore
 the space of symmetry-equivalent mappings without the combinatorial explosion of the
@@ -24,7 +24,8 @@ import numpy as np
 import numpy.typing as npt
 import pynauty as pn
 import rustworkx as rx
-from qcio import Structure
+from qcconst import constants
+from qcio import LengthUnit, Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 
@@ -39,18 +40,18 @@ from .geometry_kernels import _compute_rmsd, kabsch, qcp_rotation
 
 @dataclass
 class Component:
-    """A component with optional parent and attachment indices.
+    """A component of the molecular structure.
 
     Attributes:
         parent_idx: The index of the parent component this component is attached to. No
-            parent_idx means this is a backbone component.
-        pool: Whether this component is a pool pendant (True) or non-pool pendant (False).
+            parent_idx means this is the core component.
+        leaves: Whether the component contains leaf pendants (True) or non-leaf pendants (False).
         idxs: The indices of the atoms in this component.
 
     """
 
     parent_idx: int | None
-    pool: bool
+    leaves: bool
     idxs: npt.NDArray[np.int64]
 
 
@@ -58,7 +59,9 @@ Batch = list[Component]
 ComponentLike = list[int]
 BatchLike = list[ComponentLike]
 
-## -- Factoring functions -------------------------------------------------------------
+# ----------------------------
+# Graph Primitives
+# ----------------------------
 
 
 def _prune_graph(adj: dict[int, set[int]], keep: set[int]) -> None:
@@ -70,45 +73,6 @@ def _prune_graph(adj: dict[int, set[int]], keep: set[int]) -> None:
             adj[nbr].discard(v)
         # Remove v itself
         del adj[v]
-
-
-def _peel_pool_pendants(
-    adj: dict[int, set[int]],
-) -> tuple[set[int], list[Component]]:
-    """Peel sibling leaf groups (size>1). Returns (batch, removed_vertices).
-
-    Parameters:
-        adj: The adjacency dictionary of the structure graph.
-
-    Returns:
-        A tuple of (parent_idxs, list[Component]).
-    """
-    pools: dict[int, list[int]] = defaultdict(list)  # (parent_idx) -> list of atom indices  # fmt: skip
-
-    for atom_idx, nbrs in adj.items():
-        if len(nbrs) == 1:  # Single attached pendant
-            pools[next(iter(nbrs))].append(atom_idx)
-
-    backbone_idx_set = set(adj)  # Initialize to all indices
-    factored: list[Component] = []
-
-    # Build components
-    for parent_idx, pendant_idxs in pools.items():
-        if len(pendant_idxs) > 1:  # Multiple atoms in this pendant group
-            cmp = Component(
-                parent_idx=parent_idx,
-                pool=True,
-                idxs=np.array(sorted(pendant_idxs)),
-            )
-            factored.append(cmp)
-            backbone_idx_set.difference_update(pendant_idxs)
-
-    return backbone_idx_set, factored
-
-
-# ----------------------------
-# Helpers
-# ----------------------------
 
 
 def _rx_graph_from_adj(adj: dict[int, set[int]]) -> rx.PyGraph:
@@ -195,6 +159,11 @@ def _outside_components(adj: dict[int, set[int]], excluded: set[int]) -> list[se
     return [{g[i] for i in comp} for comp in rx.connected_components(g)]
 
 
+# ----------------------------
+# Cycle Factoring
+# ----------------------------
+
+
 def _absorb_components(
     adj: dict[int, set[int]],
     cycles: list[set[int]],
@@ -251,13 +220,13 @@ def _absorb_components(
     return new_cycles, remaining
 
 
-def _determine_backbone_and_factor_cycles(
+def _determine_core_and_factor_cycles(
     adj: dict[int, set[int]],
     cycles: list[set[int]],
     remaining: list[set[int]],
 ) -> tuple[set[int], list[Component]]:
     """
-    Determine a backbone vertex-set and factor pendant ring-systems ("cycle blobs") into Components.
+    Determine a core vertex-set and factor pendant ring-systems ("cycle blobs") into Components.
 
     Definitions
     ----------
@@ -274,8 +243,8 @@ def _determine_backbone_and_factor_cycles(
 
     Goal / heuristic
     ----------------
-    We want a clean "rooted" factoring where *factored* cycle blobs attach to the backbone
-    by exactly one outside contact that lies in the final backbone set.
+    We want a clean "rooted" factoring where *factored* cycle blobs attach to the core
+    by exactly one outside contact that lies in the final core set.
 
     Algorithm
     ---------
@@ -284,33 +253,33 @@ def _determine_backbone_and_factor_cycles(
 
     Pass 1a (size seed): Let R = union(remaining) (non-cycle remainder).
         If R is non-empty and the largest cycle blob is larger than R, absorb that largest cycle
-        into the backbone seed. (Macrocycle-backbone case.)
+        into the core seed. (Macrocycle-core case.)
 
         This is a *single* absorption (largest-by-size). After absorption, no other cycle can be
-        larger than the backbone seed (since it was the largest cycle).
+        larger than the core seed (since it was the largest cycle).
 
-    Pass 1b: Define backbone seed B as:
+    Pass 1b: Define core seed B as:
         B = R  U (optional absorbed-largest-cycle) U union_{i : |boundary[i]| != 1} cycles[i]
 
       Intuition:
-        - all non-cyclic remainder is backbone by default
+        - all non-cyclic remainder is core by default
         - plus optional "largest macrocycle" if it dominates the remainder
-        - |∂| = 0   : freestanding ring fragment => not pendant => backbone
-        - |∂| > 1   : embedded / connective ring => not pendant => backbone
+        - |∂| = 0   : freestanding ring fragment => not pendant => core
+        - |∂| > 1   : embedded / connective ring => not pendant => core
 
     Pass 2: For each cycle blob with |∂| = 1, let its unique outside neighbor be p.
         - If p ∈ B: factor this blob as Component(parent_idx=p)
-        - Else: do NOT factor; absorb into backbone
+        - Else: do NOT factor; absorb into core
                 (prevents biphenyl-like A—B where each sees only the other as its unique outside contact)
 
       Factored blobs are merged by shared parent_idx to handle multiple rings off the same parent.
 
     Returns
     -------
-    backbone_idx_set: set[int]
-        All vertex ids considered backbone after absorption decisions.
+    core_idxs: set[int]
+        All vertex ids considered core after absorption decisions.
     components: list[Component]
-        Factored pendant cycle Components (pool=False), merged by parent_idx.
+        Factored pendant cycle Components (leaf=False), merged by parent_idx.
     """
     if not adj:
         return set(), []
@@ -325,81 +294,76 @@ def _determine_backbone_and_factor_cycles(
                     b.add(nbr)
         boundaries.append(b)
 
-    # ---- Pass 1: backbone seed from remainder ----
-    backbone: set[int] = set()
+    # ---- Pass 1: core seed from remainder ----
+    core_idxs: set[int] = set()
     for r in remaining:
-        backbone |= r  # R = union(remaining)
+        core_idxs |= r  # R = union(remaining)
 
-    # Pass 1a: size-seed macrocycle-backbone case
-    # If the largest cycle dominates the remainder, treat it as part of backbone.
+    # Pass 1a: size-seed macrocycle-core case
+    # If the largest cycle dominates the remainder, treat it as part of core.
     if cycles:
         max_i = max(range(len(cycles)), key=lambda i: len(cycles[i]))
         largest = cycles[max_i]
-        if backbone:
+        if core_idxs:
             # Normal case: compare against non-cyclic remainder size
-            if len(largest) > len(backbone):
-                backbone |= largest
+            if len(largest) > len(core_idxs):
+                core_idxs |= largest
         else:
             # Purely cyclic graph (no remainder): seed only if dominant macrocycle exists
             if len(cycles) == 1:
-                backbone |= largest
+                core_idxs |= largest
             else:
                 # Compute 2nd largest size without sorting whole list
                 second = max(len(cycles[i]) for i in range(len(cycles)) if i != max_i)
                 if len(largest) > second:
-                    backbone |= largest
+                    core_idxs |= largest
 
     # Pass 1b: absorb all cycles with |∂| != 1
     for cyc, b in zip(cycles, boundaries):
         if len(b) != 1:
-            backbone |= cyc
+            core_idxs |= cyc
 
-    # Freeze the backbone anchor AFTER Pass 1 decisions
-    backbone_anchor = set(backbone)
+    # Freeze the core anchor AFTER Pass 1 decisions
+    core_anchor = set(core_idxs)
 
-    # ---- Pass 2: factor pendant cycles whose unique outside contact is in backbone ----
+    # ---- Pass 2: factor pendant cycles whose unique outside contact is in core ----
     parent2idxs: defaultdict[int, set[int]] = defaultdict(set)
 
     for cyc, b in zip(cycles, boundaries):
         if len(b) != 1:
-            continue  # already absorbed in pass 1b (or will be in backbone anyway)
-        if cyc <= backbone_anchor:
-            # Cycle was already absorbed into backbone in pass 1a/1b; do not refactor it.
+            continue  # already absorbed in pass 1b (or will be in core anyway)
+        if cyc <= core_anchor:
+            # Cycle was already absorbed into core in pass 1a/1b; do not refactor it.
             continue
 
         parent = next(iter(b))
-        if parent in backbone_anchor:
+        if parent in core_anchor:
             parent2idxs[parent].update(cyc)
         else:
-            # Unique outside contact is not in backbone => "ring-to-ring" only (biphenyl-like)
+            # Unique outside contact is not in core => "ring-to-ring" only (biphenyl-like)
             # or other non-rooted situation; absorb it.
-            backbone |= cyc
+            core_idxs |= cyc
 
     components: list[Component] = [
         Component(
             parent_idx=parent,
-            pool=False,
+            leaves=False,
             idxs=np.array(sorted(idxs), dtype=np.int64),
         )
         for parent, idxs in parent2idxs.items()
     ]
 
-    return backbone, components
+    return core_idxs, components
 
 
-# ----------------------------
-# Public: peel cyclic pendants
-# ----------------------------
-
-
-def _peel_cyclic_substituents(
+def _peel_cycles(
     adj: dict[int, set[int]],
 ) -> tuple[set[int], list[Component]]:
     """
     Peel cyclic pendant components from the graph.
 
     Returns:
-      backbone_vertex_ids, list[Components] (cycles with their substituents)
+      core_vertex_ids, list[Components] (cycles with their substituents)
     """
     # 1: cycle blobs
     cycles = _cycles(adj)
@@ -410,13 +374,66 @@ def _peel_cyclic_substituents(
     # 3: Absorb components into cycle blobs
     full_cycles, remaining_outside_ccs = _absorb_components(adj, cycles, outside_ccs)
 
-    # 4: Determine backbone and factor cycle components
-    return _determine_backbone_and_factor_cycles(
-        adj, full_cycles, remaining_outside_ccs
-    )
+    # 4: Determine core and factor cycle components
+    return _determine_core_and_factor_cycles(adj, full_cycles, remaining_outside_ccs)
 
 
-def _peel_substituents(adj, *, color):
+# ----------------------------
+# Pendant Factoring
+# ----------------------------
+
+
+def _peel_symmetric_leaves(
+    adj: dict[int, set[int]],
+    color: list[int],
+) -> tuple[set[int], list[Component]]:
+    """Peel duplicated leaf siblings, grouping peeled leaves by parent.
+
+    Parameters:
+        adj: The adjacency dictionary of the structure graph.
+        color: Vertex colors / labels, indexed by atom index.
+
+    Returns:
+        A tuple of (core_idxs, list[Component]).
+    """
+    leaves_by_parent: dict[int, list[int]] = defaultdict(list)
+
+    for atom_idx, nbrs in adj.items():
+        if len(nbrs) == 1:  # This vertex is a leaf
+            parent_idx = next(iter(nbrs))
+            leaves_by_parent[parent_idx].append(atom_idx)
+
+    core_idxs = set(adj)
+    factored: list[Component] = []
+
+    for parent_idx, leaf_idxs in leaves_by_parent.items():
+        if len(leaf_idxs) < 2:  # Only consider if there are siblings to factor
+            continue
+
+        by_color: dict[int, list[int]] = defaultdict(list)  # {H: [1,5,6], F: [4,3]}
+        for idx in leaf_idxs:
+            by_color[color[idx]].append(idx)
+
+        duplicated_idxs = sorted(
+            idx for group in by_color.values() if len(group) > 1 for idx in group
+        )
+
+        if not duplicated_idxs:
+            continue
+
+        factored.append(
+            Component(
+                parent_idx=parent_idx,
+                leaves=True,
+                idxs=np.array(duplicated_idxs),
+            )
+        )
+        core_idxs.difference_update(duplicated_idxs)
+
+    return core_idxs, factored
+
+
+def _peel_symmetric_branches(adj, *, color):
     """
     Peel repeated rooted isomorphic substituent branches off high-degree (>=4) vertices.
 
@@ -426,16 +443,16 @@ def _peel_substituents(adj, *, color):
 
     Guardrails:
       - Only consider parents with degree >= 4.
-      - Only consider branches with > 1 vertex (so we don't steal leaf pooling work).
+      - Only consider branches with > 1 vertex (so we don't steal leaf leafing work).
       - Parent-local rollback: if peeling ALL factorable groups at a parent would leave the
         parent with <2 remaining neighbors, peel NOTHING at that parent (avoid arbitrary
-        backbone choice on ambiguous small graphs like CCC(O)(O)CC).
+        core choice on ambiguous small graphs like CCC(O)(O)CC).
 
     Returns:
-      backbone_idx_set: vertices left after peeling
-      components: list of non-pool Components representing peeled unions
+      core_idx_set: vertices left after peeling
+      components: list of non-leaf Components representing peeled unions
     """
-    backbone_idx_set = set(adj.keys())
+    core_idx_set = set(adj.keys())
     components = []
 
     for parent, nbrs in adj.items():
@@ -448,7 +465,7 @@ def _peel_substituents(adj, *, color):
         for root in nbrs:
             # Single pass to get both the set of nodes and the tree signature
             verts, sig = _get_branch_info(adj, parent, root, color)
-            if len(verts) > 1:  # Single node branches handled by peel pool pendants
+            if len(verts) > 1:  # Single node branches handled by peel leaf pendants
                 sig2branches[sig].append(verts)
 
         # Filter for groups that actually have duplicates
@@ -459,7 +476,7 @@ def _peel_substituents(adj, *, color):
             continue
 
         # If peeling all groups would leave parent with <2 remaining neighbors,
-        # peel NOTHING at this parent (avoid arbitrary backbone choice).
+        # peel NOTHING at this parent (avoid arbitrary core choice).
         all_peeled_nodes = {
             v for group in peel_candidates for v_set in group for v in v_set
         }
@@ -471,15 +488,20 @@ def _peel_substituents(adj, *, color):
                 components.append(
                     Component(
                         parent_idx=parent,
-                        pool=False,
+                        leaves=False,
                         idxs=np.array(sorted(union), dtype=np.int64),
                     )
                 )
-                backbone_idx_set -= union
-    return backbone_idx_set, components
+                core_idx_set -= union
+    return core_idx_set, components
 
 
-def factor_plan_recursive(
+# ----------------------------
+# Factor Planning
+# ----------------------------
+
+
+def _factor_plan_recursive(
     adj_dict: dict[int, list[int]], *, depth: int, color: list[int]
 ) -> list[Batch]:
     adj = {i: set(nbrs) for i, nbrs in adj_dict.items()}
@@ -492,41 +514,61 @@ def factor_plan_recursive(
             return
 
         to_append = []
-        backbone_idxs, factored_pools = _peel_pool_pendants(adj)
-        if factored_pools:
-            to_append.extend(factored_pools)
-            _prune_graph(adj, backbone_idxs)
+        core_idxs, leaves = _peel_symmetric_leaves(adj, color=color)
+        if leaves:
+            to_append.extend(leaves)
+            _prune_graph(adj, core_idxs)
 
-        backbone_idxs, factored_cycles = _peel_cyclic_substituents(adj)
-        if factored_cycles:
-            to_append.extend(factored_cycles)
-            _prune_graph(adj, backbone_idxs)
+        core_idxs, cycles = _peel_cycles(adj)
+        if cycles:
+            to_append.extend(cycles)
+            _prune_graph(adj, core_idxs)
 
-        backbone_idxs, factored_subs = _peel_substituents(adj, color=color)
-        if factored_subs:
-            to_append.extend(factored_subs)
-            _prune_graph(adj, backbone_idxs)
+        core_idxs, branches = _peel_symmetric_branches(adj, color=color)
+        if branches:
+            to_append.extend(branches)
+            _prune_graph(adj, core_idxs)
 
         if to_append:
-            to_append.reverse()  # Subs, Cycles, then pools
+            to_append.reverse()  # Branches, cycles, then leaves
             reversed_batch.append(to_append)
             _recur(depth - 1)
 
     # Initial factoring of first pendant layer
-    backbone_idxs, factored_pools = _peel_pool_pendants(adj)
-    if factored_pools:
-        reversed_batch.append(factored_pools)
-        _prune_graph(adj, backbone_idxs)
+    core_idxs, leaves = _peel_symmetric_leaves(adj, color=color)
+    if leaves:
+        reversed_batch.append(leaves)
+        _prune_graph(adj, core_idxs)
 
     _recur(depth - 1)
 
     # Backbone is whatever remains after factoring
-    backbone_idxs = np.array(sorted(adj.keys()), dtype=int)
-    backbone = Component(parent_idx=None, pool=False, idxs=backbone_idxs)
-    return [[backbone], *reversed(reversed_batch)]
+    core_idxs = np.array(sorted(adj.keys()), dtype=int)
+    core = Component(parent_idx=None, leaves=False, idxs=core_idxs)
+    return [[core], *reversed(reversed_batch)]
 
 
-## -- Helper functions -------------------------------------------------------------
+def _validate_factoring(batches: list[Batch]) -> None:
+    """Validate that the provided factoring is well-formed."""
+    seen_idxs = set(batches[0][0].idxs)  # Start with core indices
+    # Ensure parent is fixed before child and no duplicate indices
+    for batch in batches:
+        for component in batch:
+            if component.parent_idx is None:
+                continue  # Backbone component, no parent
+            if component.parent_idx not in seen_idxs:
+                raise ValueError(f"Component with parent_idx={component.parent_idx} appears before its parent in the factored batches.")  # fmt: skip
+            for idx in component.idxs:
+                if idx in seen_idxs:
+                    raise ValueError(f"Duplicate index {idx} found in factored components.")  # fmt: skip
+                seen_idxs.add(idx)
+
+
+# ----------------------------
+# Component Mapping Helpers
+# ----------------------------
+
+
 def _induced_local_adj(
     adj: dict[int, list[int]], nodes: npt.NDArray[np.int64]
 ) -> tuple[dict[int, list[int]], dict[int, int]]:
@@ -561,30 +603,30 @@ def _build_B_comp_lookup(
     batches: list[Batch], M: npt.NDArray[np.int64]
 ) -> dict[tuple[int | None, bool], npt.NDArray[np.int64]]:
     """Build lookup of B components by parent_idx using canonical map M."""
-    # (B_parent_idx, pool) -> indices in B
+    # (B_parent_idx, leaf) -> indices in B
     b_lookup: dict[tuple[int | None, bool], npt.NDArray[np.int64]] = {}
     for component in it.chain.from_iterable(batches):
         idxs = M[component.idxs]
-        is_pool = component.pool
+        is_leaf = component.leaves
         if component.parent_idx is None:
-            parent = (None, is_pool)
+            parent = (None, is_leaf)
         else:
-            parent = (M[component.parent_idx], is_pool)
+            parent = (M[component.parent_idx], is_leaf)
         b_lookup[parent] = idxs
 
     return b_lookup
 
 
-def _match_pool_component(
+def _match_leaf_component(
     A_C: np.ndarray,
-    B_pool: np.ndarray,
+    B_leaf: np.ndarray,
     A_orbit_ids: list[int],
     B_orbit_ids: list[int],
 ) -> np.ndarray:
-    """Return B_pool indices aligned *positionally* to A_C by orbit id."""
-    bins: dict[int, deque] = defaultdict(deque)  # orbit id -> deque of indices in B_pool  # fmt: skip
+    """Return B_leaf indices aligned *positionally* to A_C by orbit id."""
+    bins: dict[int, deque] = defaultdict(deque)  # orbit id -> deque of indices in B_leaf  # fmt: skip
 
-    for idx in B_pool:
+    for idx in B_leaf:
         bins[B_orbit_ids[idx]].append(idx)
 
     B_C = np.empty_like(A_C)
@@ -638,7 +680,9 @@ def _match_structured_component(
     return B_C
 
 
-## -- Local automorphism group computation ------------------------------------------------
+# ----------------------------
+# Permutation Helpers
+# ----------------------------
 def _component_autogroup(
     adj_dict: dict[int, list[int]],
     orbit_ids: list[int],
@@ -674,7 +718,7 @@ def _iter_component_perms(
         An iterable of permutations (as lists) acting on the component indices
         reindex to 0..|C|-1.
     """
-    if component.pool:  # Direct permutations by element type
+    if component.leaves:  # Direct permutations by element type
         # Group by orbit id (proxy for element types)
         groups = defaultdict(list)
         for i, c_idx in enumerate(component.idxs):
@@ -687,13 +731,17 @@ def _iter_component_perms(
                 *(it.permutations(idxs) for idxs in groups.values())
             )
         )
-    else:  # Backbone or non-pool pendant
+    else:  # Backbone or non-leaf pendant
         return _component_autogroup(
             adj_dict, orbit_ids, component.idxs
         ).generate_schreier_sims(af=True)
 
 
-## -- Alignment helpers -------------------------------------------------------------
+# ----------------------------
+# Scoring Helpers
+# ----------------------------
+
+
 def _aligned_rmsd_for_candidate(
     A_geom: npt.NDArray[np.float64],
     B_geom: npt.NDArray[np.float64],
@@ -728,23 +776,11 @@ def _align_fixed(
     return (A - cA) @ R.T + cB  # align all of A
 
 
-def _validate_factoring(batches: list[Batch]) -> None:
-    """Validate that the provided factoring is well-formed."""
-    seen_idxs = set(batches[0][0].idxs)  # Start with backbone indices
-    # Ensure parent is fixed before child and no duplicate indices
-    for batch in batches:
-        for component in batch:
-            if component.parent_idx is None:
-                continue  # Backbone component, no parent
-            if component.parent_idx not in seen_idxs:
-                raise ValueError(f"Component with parent_idx={component.parent_idx} appears before its parent in the factored batches.")  # fmt: skip
-            for idx in component.idxs:
-                if idx in seen_idxs:
-                    raise ValueError(f"Duplicate index {idx} found in factored components.")  # fmt: skip
-                seen_idxs.add(idx)
+# ----------------------------
+# Public API
+# ----------------------------
 
 
-# -- Public API ---------------------------------------------------------------------
 def snap_rmsd_align_assign(
     a_struct: Structure,
     b_struct: Structure,
@@ -756,6 +792,7 @@ def snap_rmsd_align_assign(
     align: bool = True,
     alignment_backend: str = "kabsch",
     align_per_component: bool = False,
+    units: str | LengthUnit = "bohr",
 ) -> tuple[float, Structure, list[int]]:
     # TODO: Add compute_connectivity_if_missing parameter?
     """
@@ -815,6 +852,9 @@ def snap_rmsd_align_assign(
             is processed. Default is False meaning that realignment is only done after
             each batch, except for the first component which must align for each proposed
             permutation to establish the initial common reference frame.
+        units: The units of the input structures' geometry and the output RMSD. Options are
+            'bohr' (default) or 'angstrom'.
+
 
     Returns:
         (float, a_aligned, P_opt): The computed snapRMSD value, an aligned a_struct, and the
@@ -826,6 +866,12 @@ def snap_rmsd_align_assign(
     #   - Once per graph for canonical labels
     #   - Once for A to get automorphism group
 
+    try:
+        units = LengthUnit(units)
+    except ValueError:
+        raise ValueError(
+            f"Invalid units '{units}'. Valid options are 'bohr' or 'angstrom'."
+        )
     # --- Graphs & isomorphism check
     A_adj, B_adj = adjacency_dict(a_struct), adjacency_dict(b_struct)
     if not A_adj or not B_adj:
@@ -854,11 +900,11 @@ def snap_rmsd_align_assign(
     if factoring is not None:
         # TODO: Possibly implement normalization for the simplified BatchLike format
         batches = factoring
-    elif factor_depth == 0:  # Whole structure as backbone
+    elif factor_depth == 0:  # Whole structure as core
         idxs = np.array(range(len(a_struct.symbols)))
-        batches = [[Component(parent_idx=None, pool=False, idxs=idxs)]]
+        batches = [[Component(parent_idx=None, leaves=False, idxs=idxs)]]
     else:
-        batches = factor_plan_recursive(A_adj, depth=factor_depth, color=A_orbit_ids)
+        batches = _factor_plan_recursive(A_adj, depth=factor_depth, color=A_orbit_ids)
 
     _validate_factoring(batches)
     B_C_by_parent = _build_B_comp_lookup(batches, M)
@@ -874,14 +920,16 @@ def snap_rmsd_align_assign(
             p_idx = component.parent_idx
             if p_idx is None or P_opt[p_idx] == M[p_idx]:  # Backbone component or parent not remapped  # fmt: skip
                 B_C = M[A_C]  # Initial canonical map still valid
-            elif component.pool:  # Remapped pool pendant
-                B_idxs = B_C_by_parent[P_opt[p_idx], component.pool]
-                B_C = _match_pool_component(A_C, B_idxs, A_orbit_ids, B_orbit_ids)
+            elif component.leaves:  # Remapped leaf pendant
+                B_idxs = B_C_by_parent[P_opt[p_idx], component.leaves]
+                B_C = _match_leaf_component(A_C, B_idxs, A_orbit_ids, B_orbit_ids)
             else:  # Remapped structured pendant
-                B_idxs = B_C_by_parent[P_opt[p_idx], component.pool]
+                B_idxs = B_C_by_parent[P_opt[p_idx], component.leaves]
                 B_C = _match_structured_component(A_C, B_idxs, A_adj, B_adj, A_orbit_ids, B_orbit_ids)  # fmt: skip
 
+            count = 0
             for perm in _iter_component_perms(A_adj, A_orbit_ids, component):
+                count += 1
                 B_C_perm = B_C[perm]
 
                 if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
@@ -896,6 +944,10 @@ def snap_rmsd_align_assign(
 
             # Lock-in best permutation for this component
             P_opt[A_C] = B_C[best_perm]
+            print(
+                f"Count for component {c_idx} in batch {b_idx}: {count}"
+            )  # TODO: Remove after debugging
+            count = 0  # Reset count for next component
 
             # Per component and/or first component alignment (establishes frame)
             if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
@@ -909,6 +961,8 @@ def snap_rmsd_align_assign(
     assert all(v == 1 for v in Counter(P_opt).values()), "P_opt is not a valid permutation!"  # Sanity check while debugging # fmt: skip
     # Align false because already aligned at the end of the last batch if needed
     final_rmsd = _compute_rmsd(A_geom, B_geom[P_opt], align=False)
+    if units == LengthUnit.ANGSTROM:
+        final_rmsd = final_rmsd * constants.BOHR_TO_ANGSTROM
     # Create aligned a Structure
     a_aligned = a_struct.model_copy(update={"geometry": A_geom}, deep=True)
     return final_rmsd, a_aligned, [int(x) for x in P_opt]
