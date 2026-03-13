@@ -712,6 +712,7 @@ dev = [
     { name = "types-toml", specifier = ">=0.10.8.6" },
 ]
 docs = [
+    { name = "livereload", specifier = ">=2.7.1" },
     { name = "markdown-include", specifier = ">=0.8.1" },
     { name = "mkdocs", specifier = ">=1.6.0" },
     { name = "mkdocs-exclude", specifier = ">=1.0.2" },
