@@ -6,7 +6,10 @@ from qcio import Structure
 
 from qcinf._backends import rdkit
 
+from . import snap
+
 _RMSD_BACKEND_MAP: dict[str, Callable[..., float]] = {
+    "qcinf": snap.snap_rmsd,
     "rdkit": rdkit._rmsd_rdkit,
 }
 
@@ -15,7 +18,7 @@ def rmsd(
     struct1: Structure,
     struct2: Structure,
     *,
-    backend: str = "rdkit",
+    backend: str = "qcinf",
     **kwargs,
 ) -> float:
     """Calculate the root mean square deviation (RMSD) between two structures.
@@ -23,7 +26,7 @@ def rmsd(
     Args:
         struct1: The first structure.
         struct2: The second structure.
-        backend: The backend to use for the RMSD calculation. Can be 'rdkit'.
+        backend: The backend to use for the RMSD calculation. Can be 'qcinf' or'rdkit'.
         **kwargs: Backend-specific additional keywords to pass to the RMSD calculation
             function. This can include options like 'symmetry' for symmetry-based RMSD
             calculations. The specific options depend on the backend used. See
@@ -46,6 +49,7 @@ def rmsd(
 
 _ALIGN_BACKEND_MAP: dict[str, Callable[..., tuple[Structure, float]]] = {
     "rdkit": rdkit._align_rdkit,
+    "qcinf": snap.snap_align_rmsd,
 }
 
 

@@ -9,3 +9,4 @@ except _metadata.PackageNotFoundError:
 from .algorithms.connectivity import *  # noqa: F401, F403
 from .algorithms.conversion import *  # noqa: F401, F403
 from .algorithms.geometry import *  # noqa: F401, F403
+from .algorithms.snap import *  # noqa: F401, F403

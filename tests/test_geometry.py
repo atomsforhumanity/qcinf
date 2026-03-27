@@ -23,7 +23,7 @@ def test_rmsd_identical_structures():
     struct1 = Structure(symbols=symbols, geometry=geometry)
     struct2 = Structure(symbols=symbols, geometry=geometry)
 
-    calculated_rmsd = rmsd(struct1, struct2, symmetry=False)
+    calculated_rmsd = rmsd(struct1, struct2, symmetry=False, backend="rdkit")
     assert np.isclose(calculated_rmsd, 0.0, atol=1e-6), (
         "RMSD should be zero for identical structures"
     )

@@ -11,7 +11,7 @@ Main entry point:
 Public convenience wrappers:
     - `snap_rmsd`: returns `rmsd`.
     - `snap_align`: returns `a_aligned`.
-    - `snap_rmsd_align`: returns `(rmsd, a_aligned)`.
+    - `snap_align_rmsd`: returns `(a_aligned, rmsd)`.
     - `snap_assign`: returns `p_opt`.
 """
 
@@ -37,6 +37,14 @@ from .connectivity_helpers import (
     _to_pynauty_graph_adj_color,
 )
 from .geometry_kernels import _compute_rmsd, kabsch, qcp_rotation
+
+__all__ = [
+    "snap_align",
+    "snap_align_rmsd",
+    "snap_assign",
+    "snap_rmsd",
+    "snap_rmsd_align_assign",
+]
 
 
 @dataclass
@@ -470,7 +478,9 @@ def _peel_symmetric_branches(
         for root in nbrs:
             # Single pass to get both the set of nodes and the tree signature
             verts, sig = _get_branch_info(adj, parent, root, color)
-            if len(verts) > 1:  # Single-node branches are handled by leaf peripheral peeling
+            if (
+                len(verts) > 1
+            ):  # Single-node branches are handled by leaf peripheral peeling
                 sig2branches[sig].append(verts)
 
         # Filter for groups that actually have duplicates
@@ -520,16 +530,19 @@ def _factor_plan_recursive(
 
         to_append = []
         core_idxs, leaves = _peel_symmetric_leaves(adj, color=color)
+        print(core_idxs)
         if leaves:
             to_append.extend(leaves)
             _prune_graph(adj, core_idxs)
 
         core_idxs, cycles = _peel_cycles(adj)
+        print(core_idxs)
         if cycles:
             to_append.extend(cycles)
             _prune_graph(adj, core_idxs)
 
         core_idxs, branches = _peel_symmetric_branches(adj, color=color)
+        print(core_idxs)
         if branches:
             to_append.extend(branches)
             _prune_graph(adj, core_idxs)
@@ -541,6 +554,7 @@ def _factor_plan_recursive(
 
     # Initial factoring of first peripheral layer
     core_idxs, leaves = _peel_symmetric_leaves(adj, color=color)
+    print(core_idxs)
     if leaves:
         reversed_batch.append(leaves)
         _prune_graph(adj, core_idxs)
@@ -980,7 +994,7 @@ def snap_rmsd_align_assign(
     final_rmsd = _compute_rmsd(a_geom, b_geom[p_opt], align=False)
     if units == LengthUnit.ANGSTROM:
         final_rmsd = final_rmsd * constants.BOHR_TO_ANGSTROM
-        
+
     # Create aligned a Structure
     a_aligned = a_struct.model_copy(update={"geometry": a_geom}, deep=True)
     return final_rmsd, a_aligned, [int(x) for x in p_opt]
@@ -1002,14 +1016,14 @@ def snap_align(
     return a_aligned
 
 
-def snap_rmsd_align(
+def snap_align_rmsd(
     a_struct: Structure,
     b_struct: Structure,
     **kwargs,
-) -> tuple[float, Structure]:
+) -> tuple[Structure, float]:
     """Thin convenience wrapper around :func:`snap_rmsd_align_assign` to return RMSD and aligned structure."""  # fmt: skip
     rmsd, a_aligned, _ = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
-    return rmsd, a_aligned
+    return a_aligned, rmsd
 
 
 def snap_assign(

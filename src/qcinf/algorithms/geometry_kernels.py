@@ -168,7 +168,7 @@ def _compute_rmsd(
     # Compute the difference between the two arrays
     diff = coords1 - coords2
     # Sum squared differences for each atom (row) and average over all atoms
-    return np.sqrt(np.mean(np.sum(diff**2, axis=1)))
+    return float(np.sqrt(np.mean(np.sum(diff**2, axis=1))))
 
 
 def rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
