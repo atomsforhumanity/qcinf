@@ -6,17 +6,17 @@
 [![Actions status](https://github.com/coltonbh/qcinf/workflows/Tests/badge.svg)](https://github.com/coltonbh/qcinf/actions)
 [![Actions status](https://github.com/coltonbh/qcinf/workflows/Basic%20Code%20Quality/badge.svg)](https://github.com/coltonbh/qcinf/actions)
 
-Cheminformatics algorithms and structure utilities using standardized [qcio](https://qcio.coltonhicks.com/) data structures.
+Cheminformatics algorithms and structure utilities using standardized [qcdata](https://qcdata.coltonhicks.com/) data structures.
 
 ## The QC Suite of Programs
 
 `qcinf` works in harmony with a suite of other quantum chemistry tools for fast, structured, and interoperable quantum chemistry.
 
 - [qcconst](https://github.com/coltonbh/qcconst) - Physical constants, conversion factors, and a periodic table with clear source information for every value.
-- [qcio](https://github.com/coltonbh/qcio) - Elegant and intuitive data structures for quantum chemistry, featuring seamless Jupyter Notebook visualizations. [Documentation](https://qcio.coltonhicks.com)
-- [qcinf](https://github.com/coltonbh/qcinf) - Cheminformatics algorithms and structure utilities using standardized [qcio](https://qcio.coltonhicks.com/) data structures.
-- [qccodec](https://github.com/coltonbh/qccodec) - A package for translating between standardized [qcio](https://github.com/coltonbh/qcio) data structures and native QC program inputs and outputs.
-- [qcop](https://github.com/coltonbh/qcop) - A package for operating quantum chemistry programs using standardized [qcio](https://qcio.coltonhicks.com/) data structures. Compatible with `TeraChem`, `psi4`, `QChem`, `NWChem`, `ORCA`, `Molpro`, `geomeTRIC` and many more.
+- [qcdata](https://github.com/coltonbh/qcdata) - Elegant and intuitive data structures for quantum chemistry, featuring seamless Jupyter Notebook visualizations. [Documentation](https://qcdata.coltonhicks.com)
+- [qcinf](https://github.com/coltonbh/qcinf) - Cheminformatics algorithms and structure utilities using standardized [qcdata](https://qcdata.coltonhicks.com/) data structures.
+- [qccodec](https://github.com/coltonbh/qccodec) - A package for translating between standardized [qcdata](https://github.com/coltonbh/qcdata) data structures and native QC program inputs and outputs.
+- [qcop](https://github.com/coltonbh/qcop) - A package for operating quantum chemistry programs using standardized [qcdata](https://qcdata.coltonhicks.com/) data structures. Compatible with `TeraChem`, `psi4`, `QChem`, `NWChem`, `ORCA`, `Molpro`, `geomeTRIC` and many more.
 - [BigChem](https://github.com/mtzgroup/bigchem) - A distributed application for running quantum chemistry calculations at scale across clusters of computers or the cloud. Bring multi-node scaling to your favorite quantum chemistry program.
 - `ChemCloud` - A [web application](https://github.com/mtzgroup/chemcloud-server) and associated [Python client](https://github.com/mtzgroup/chemcloud-client) for exposing a BigChem cluster securely over the internet.
 

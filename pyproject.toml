@@ -1,14 +1,14 @@
 [project]
 name = "qcinf"
 version = "0.2.1"
-description = "Cheminformatics algorithms and structure utilities using standardized qcio data structures."
+description = "Cheminformatics algorithms and structure utilities using standardized qcdata data structures."
 readme = "README.md"
 authors = [{ name = "Colton Hicks", email = "github@coltonhicks.com" }]
 requires-python = ">=3.10"
 dependencies = [
     "pydantic~=2.0,!=2.0.1,!=2.1.0",
     "qcconst>=0.2.1",
-    "qcio>=0.14.0",
+    "qcdata>=0.17.0",
     "typing-extensions>=4.12.2",
     "numpy>=1.24.0",
     "sympy>=1.14.0",
@@ -89,4 +89,4 @@ filterwarnings = [
 ]
 
 [tool.uv.sources]
-qcio = { path = "../qcio", editable = true }
+qcdata = { path = "../qcdata", editable = true }
