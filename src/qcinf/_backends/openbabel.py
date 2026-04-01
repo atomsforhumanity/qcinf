@@ -7,7 +7,7 @@ from typing import TypeVar
 import numpy as np
 import qcconst.periodic_table as pt
 from qcconst import constants
-from qcio import Structure
+from qcdata import Structure
 from typing_extensions import ParamSpec
 
 try:

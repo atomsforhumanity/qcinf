@@ -1,5 +1,5 @@
 import numpy as np
-from qcio import Structure
+from qcdata import Structure
 
 from qcinf import adjacency_dict, determine_connectivity
 from qcinf.algorithms import snap

@@ -1,7 +1,7 @@
 import warnings
 
 import numpy as np
-from qcio import Structure
+from qcdata import Structure
 
 from qcinf.exceptions import NumbaUnavailableError
 

@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from qcio import Structure
+from qcdata import Structure
 
 from qcinf._backends import openbabel, rdkit
 
@@ -56,7 +56,7 @@ def structure_to_smiles(
     options: dict[str, Any] | None = None,
 ) -> str:
     """
-    Convert a [`qcio.Structure`][qcio.Structure] into a canonical SMILES string.
+    Convert a [`qcdata.Structure`][qcdata.Structure] into a canonical SMILES string.
 
     Args:
         struct: The Structure object to convert.

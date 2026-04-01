@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from qcio import Structure
+from qcdata import Structure
 
 from qcinf.algorithms import snap
 

@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from qcio import Structure
+from qcdata import Structure
 
 from qcinf._backends import rdkit
 

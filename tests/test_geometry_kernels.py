@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from qcio import Structure  # if you need it explicitly
+from qcdata import Structure  # if you need it explicitly
 
 from qcinf import smiles_to_structure
 from qcinf.algorithms.geometry_kernels import (

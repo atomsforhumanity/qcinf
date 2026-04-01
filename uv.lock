@@ -589,80 +589,9 @@ wheels = [
 ]
 
 [[package]]
-name = "qcinf"
-version = "0.2.1"
-source = { editable = "." }
-dependencies = [
-    { name = "numpy" },
-    { name = "pydantic" },
-    { name = "pynauty" },
-    { name = "qcconst" },
-    { name = "qcio" },
-    { name = "rustworkx" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "openbabel-wheel" },
-    { name = "rdkit" },
-]
-fast = [
-    { name = "numba" },
-]
-openbabel = [
-    { name = "openbabel-wheel" },
-]
-rdkit = [
-    { name = "rdkit" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "numba" },
-    { name = "openbabel-wheel" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "rdkit" },
-    { name = "ruff" },
-    { name = "types-toml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numba", marker = "extra == 'fast'", specifier = ">=0.57.0" },
-    { name = "numpy", specifier = ">=1.24.0" },
-    { name = "openbabel-wheel", marker = "extra == 'all'", specifier = ">=3.1.1.21" },
-    { name = "openbabel-wheel", marker = "extra == 'openbabel'", specifier = ">=3.1.1.21" },
-    { name = "pydantic", specifier = "~=2.0,!=2.0.1,!=2.1.0" },
-    { name = "pynauty", specifier = ">=2.8.8.1" },
-    { name = "qcconst", specifier = ">=0.2.1" },
-    { name = "qcio", editable = "../qcio" },
-    { name = "rdkit", marker = "extra == 'all'", specifier = ">=2024.9.6" },
-    { name = "rdkit", marker = "extra == 'rdkit'", specifier = ">=2024.9.6" },
-    { name = "rustworkx", specifier = ">=0.17.1" },
-    { name = "sympy", specifier = ">=1.14.0" },
-    { name = "typing-extensions", specifier = ">=4.12.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.15.0" },
-    { name = "numba", specifier = ">=0.57.0" },
-    { name = "openbabel-wheel", specifier = ">=3.1.1.21" },
-    { name = "pytest", specifier = ">=8.3.5" },
-    { name = "pytest-cov", specifier = ">=6.0.0" },
-    { name = "rdkit", specifier = ">=2024.9.6" },
-    { name = "ruff", specifier = ">=0.11.1" },
-    { name = "types-toml", specifier = ">=0.10.8.20240310" },
-]
-
-[[package]]
-name = "qcio"
-version = "0.16.2"
-source = { editable = "../qcio" }
+name = "qcdata"
+version = "0.17.0"
+source = { editable = "../qcdata" }
 dependencies = [
     { name = "eval-type-backport" },
     { name = "numpy" },
@@ -712,7 +641,6 @@ dev = [
     { name = "types-toml", specifier = ">=0.10.8.6" },
 ]
 docs = [
-    { name = "livereload", specifier = ">=2.7.1" },
     { name = "markdown-include", specifier = ">=0.8.1" },
     { name = "mkdocs", specifier = ">=1.6.0" },
     { name = "mkdocs-exclude", specifier = ">=1.0.2" },
@@ -720,6 +648,77 @@ docs = [
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.25.2" },
     { name = "mknotebooks", specifier = ">=0.8.0" },
     { name = "pymdown-extensions", specifier = ">=10.8.1" },
+]
+
+[[package]]
+name = "qcinf"
+version = "0.2.1"
+source = { editable = "." }
+dependencies = [
+    { name = "numpy" },
+    { name = "pydantic" },
+    { name = "pynauty" },
+    { name = "qcconst" },
+    { name = "qcdata" },
+    { name = "rustworkx" },
+    { name = "sympy" },
+    { name = "typing-extensions" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "openbabel-wheel" },
+    { name = "rdkit" },
+]
+fast = [
+    { name = "numba" },
+]
+openbabel = [
+    { name = "openbabel-wheel" },
+]
+rdkit = [
+    { name = "rdkit" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "numba" },
+    { name = "openbabel-wheel" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "rdkit" },
+    { name = "ruff" },
+    { name = "types-toml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numba", marker = "extra == 'fast'", specifier = ">=0.57.0" },
+    { name = "numpy", specifier = ">=1.24.0" },
+    { name = "openbabel-wheel", marker = "extra == 'all'", specifier = ">=3.1.1.21" },
+    { name = "openbabel-wheel", marker = "extra == 'openbabel'", specifier = ">=3.1.1.21" },
+    { name = "pydantic", specifier = "~=2.0,!=2.0.1,!=2.1.0" },
+    { name = "pynauty", specifier = ">=2.8.8.1" },
+    { name = "qcconst", specifier = ">=0.2.1" },
+    { name = "qcdata", editable = "../qcdata" },
+    { name = "rdkit", marker = "extra == 'all'", specifier = ">=2024.9.6" },
+    { name = "rdkit", marker = "extra == 'rdkit'", specifier = ">=2024.9.6" },
+    { name = "rustworkx", specifier = ">=0.17.1" },
+    { name = "sympy", specifier = ">=1.14.0" },
+    { name = "typing-extensions", specifier = ">=4.12.2" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.15.0" },
+    { name = "numba", specifier = ">=0.57.0" },
+    { name = "openbabel-wheel", specifier = ">=3.1.1.21" },
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "rdkit", specifier = ">=2024.9.6" },
+    { name = "ruff", specifier = ">=0.11.1" },
+    { name = "types-toml", specifier = ">=0.10.8.20240310" },
 ]
 
 [[package]]

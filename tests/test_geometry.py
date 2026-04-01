@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from qcconst import constants
 from qcconst.constants import ANGSTROM_TO_BOHR
-from qcio import ConformerSearchResults, Structure
+from qcdata import ConformerSearchResults, Structure
 
 from qcinf import align, filter_conformers_indices, rmsd
 

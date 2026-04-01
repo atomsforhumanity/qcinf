@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Any
 
 import pynauty as pn
-from qcio import Structure
+from qcdata import Structure
 
 
 def _list_of_sets(coloring: list[Any]) -> list[set[Any]]:

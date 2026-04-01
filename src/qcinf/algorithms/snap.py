@@ -26,7 +26,7 @@ import numpy.typing as npt
 import pynauty as pn
 import rustworkx as rx
 from qcconst import constants
-from qcio import LengthUnit, Structure
+from qcdata import LengthUnit, Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 

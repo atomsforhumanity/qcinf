@@ -3,7 +3,7 @@ from collections import defaultdict
 import numpy as np
 import pynauty as pn
 import qcconst.periodic_table as pt
-from qcio import Structure
+from qcdata import Structure
 
 from .connectivity_helpers import _canonical_map_pn, _to_pynauty_graph_adj_color
 

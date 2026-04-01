@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from qcio.utils import water as water_struct
+from qcdata.utils import water as water_struct
 
 
 @pytest.fixture

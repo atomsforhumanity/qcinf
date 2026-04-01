@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 import numpy as np
-from qcio import Structure
+from qcdata import Structure
 
 
 def randomly_reorder_structure(struct: "Structure") -> "Structure":
