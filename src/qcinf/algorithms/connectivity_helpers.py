@@ -28,7 +28,11 @@ def _list_of_sets(coloring: list[Any]) -> list[set[Any]]:
     return [buckets[key] for key in ordered_keys]
 
 
-def _to_pynauty_graph(struct: Structure, coloring: list[Any] | None = None) -> pn.Graph:
+def _to_pynauty_graph(
+    struct: Structure,
+    coloring: list[Any] | None = None,
+    determine_connectivity_if_missing: bool = True,
+) -> pn.Graph:
     """
     Convert a Structure's and optional coloring list to a pynauty Graph.
 
@@ -38,6 +42,8 @@ def _to_pynauty_graph(struct: Structure, coloring: list[Any] | None = None) -> p
             indicates atoms 0-2 are of one color and atoms 3-5 are a second color.
             If no value is provided the Structure's symbols array is used as the
             default coloring.
+        determine_connectivity_if_missing: Whether to infer connectivity using
+            covalent radii heuristics when the structure has no connectivity defined.
     Returns:
         The corresponding pynauty Graph.
     """
@@ -45,8 +51,11 @@ def _to_pynauty_graph(struct: Structure, coloring: list[Any] | None = None) -> p
         coloring = struct.symbols
     adj_dict = struct.adjacency_dict
     if not adj_dict:
-        # TODO: Add parameter `compute_connectivity_if_missing: bool = True`
-        raise ValueError("Structure has no connectivity defined.")
+        if not determine_connectivity_if_missing:
+            raise ValueError("Structure has no connectivity defined.")
+        from .connectivity import adjacency_dict as _adjacency_dict
+
+        adj_dict = _adjacency_dict(struct)
 
     return _to_pynauty_graph_adj_color(adj_dict, coloring)
 
