@@ -4,7 +4,7 @@ from qcconst import constants
 from qcconst.constants import ANGSTROM_TO_BOHR
 from qcdata import ConformerSearchResults, Structure
 
-from qcinf import align, filter_conformers_indices, rmsd
+from qcinf import align, compute_rmsd, filter_conformers_indices, rmsd
 
 
 def test_rmsd_identical_structures():
@@ -23,10 +23,23 @@ def test_rmsd_identical_structures():
     struct1 = Structure(symbols=symbols, geometry=geometry)
     struct2 = Structure(symbols=symbols, geometry=geometry)
 
-    calculated_rmsd = rmsd(struct1, struct2, symmetry=False, backend="rdkit")
+    calculated_rmsd = compute_rmsd(struct1, struct2, symmetry=False, backend="rdkit")
     assert np.isclose(calculated_rmsd, 0.0, atol=1e-6), (
         "RMSD should be zero for identical structures"
     )
+
+
+def test_rmsd_deprecated_alias_warns():
+    """Test that the legacy rmsd alias still works but warns."""
+    struct = Structure(
+        symbols=["O", "H", "H"],
+        geometry=[[0.0, 0.0, 0.0], [1.83, 0.0, 0.0], [0.0, 1.83, 0.0]],
+    )
+
+    with pytest.warns(FutureWarning, match="renamed to `qcinf.compute_rmsd`"):
+        calculated_rmsd = rmsd(struct, struct, symmetry=False)
+
+    assert np.isclose(calculated_rmsd, 0.0, atol=1e-6)
 
 
 def test_rmsd_rotated_structures_rdkit():
@@ -58,13 +71,17 @@ def test_rmsd_rotated_structures_rdkit():
     struct2 = Structure(symbols=symbols, geometry=rotated_geometry)
 
     # Aligned by atom index (which match in this case)
-    calculated_rmsd_no_align = rmsd(struct1, struct2, symmetry=False, backend="rdkit")
+    calculated_rmsd_no_align = compute_rmsd(
+        struct1, struct2, symmetry=False, backend="rdkit"
+    )
     assert np.isclose(calculated_rmsd_no_align, 0.0, atol=1e-6), (
         "RMSD should be zero after alignment"
     )
 
     # With alignment
-    calculated_rmsd_align = rmsd(struct1, struct2, symmetry=True, backend="rdkit")
+    calculated_rmsd_align = compute_rmsd(
+        struct1, struct2, symmetry=True, backend="rdkit"
+    )
     assert np.isclose(calculated_rmsd_align, 0.0, atol=1e-6), (
         "RMSD should be zero after alignment"
     )
@@ -166,7 +183,7 @@ def test_align_with_atom_reordering_rdkit():
     aligned_struct_reorder, rmsd_reorder = align(
         struct1, struct2, symmetry=True, backend="rdkit"
     )
-    rmsd_reorder = rmsd(
+    rmsd_reorder = compute_rmsd(
         aligned_struct_reorder, struct2, symmetry=False, backend="rdkit"
     )
     assert aligned_struct_reorder.symbols == struct2.symbols, (
@@ -230,10 +247,10 @@ def test_rmsd_with_numthreads_rdkit():
     struct1 = Structure(symbols=symbols, geometry=geometry)
     struct2 = Structure(symbols=symbols, geometry=geometry)
 
-    rmsd_single_thread = rmsd(
+    rmsd_single_thread = compute_rmsd(
         struct1, struct2, symmetry=True, numthreads=1, backend="rdkit"
     )
-    rmsd_multi_thread = rmsd(
+    rmsd_multi_thread = compute_rmsd(
         struct1, struct2, symmetry=True, numthreads=4, backend="rdkit"
     )
 

@@ -1,7 +1,7 @@
 import numpy as np
 from qcdata import Structure
 
-from qcinf import determine_connectivity
+from qcinf import compute_connectivity
 from qcinf.algorithms import snap
 from qcinf.algorithms.connectivity_helpers import (
     _canonical_map_pn,
@@ -13,7 +13,7 @@ from qcinf.algorithms.connectivity_helpers import (
 def test_determine_connectivity_water():
     """Test connectivity determination on a water molecule."""
     struct = Structure(symbols=["O", "H", "H"], geometry=[[0.0, 0.0, 0.0], [1.83, 0.0, 0.0], [0.0, 1.83, 0.0]])  # fmt: skip
-    connectivity = determine_connectivity(struct)
+    connectivity = compute_connectivity(struct)
 
     expected_connectivity = [(0, 1, 1.0), (0, 2, 1.0)]  # O-H bonds
     assert connectivity == expected_connectivity, (
@@ -24,7 +24,7 @@ def test_determine_connectivity_water():
 def test_determine_connectivity_single_atom():
     """Test connectivity determination on a single atom (no bonds)."""
     struct = Structure(symbols=["He"], geometry=[[0.0, 0.0, 0.0]])
-    connectivity = determine_connectivity(struct)
+    connectivity = compute_connectivity(struct)
     assert connectivity == []
 
 
@@ -33,7 +33,7 @@ def test_determine_connectivity_unconnected():
     struct = Structure(
         symbols=["He", "Ne"], geometry=[[0.0, 0.0, 0.0], [5.0, 5.0, 5.0]]
     )
-    connectivity = determine_connectivity(struct)
+    connectivity = compute_connectivity(struct)
     assert connectivity == []
 
 

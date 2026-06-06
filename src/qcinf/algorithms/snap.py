@@ -30,7 +30,7 @@ from qcdata import LengthUnit, Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 
-from .connectivity import connectivity_to_adjacency_dict, determine_connectivity
+from .connectivity import compute_connectivity, connectivity_to_adjacency_dict
 from .connectivity_helpers import (
     _canonical_map_pn,
     _get_branch_info,
@@ -530,19 +530,16 @@ def _factor_plan_recursive(
 
         to_append = []
         core_idxs, leaves = _peel_symmetric_leaves(adj, color=color)
-        print(core_idxs)
         if leaves:
             to_append.extend(leaves)
             _prune_graph(adj, core_idxs)
 
         core_idxs, cycles = _peel_cycles(adj)
-        print(core_idxs)
         if cycles:
             to_append.extend(cycles)
             _prune_graph(adj, core_idxs)
 
         core_idxs, branches = _peel_symmetric_branches(adj, color=color)
-        print(core_idxs)
         if branches:
             to_append.extend(branches)
             _prune_graph(adj, core_idxs)
@@ -554,7 +551,6 @@ def _factor_plan_recursive(
 
     # Initial factoring of first peripheral layer
     core_idxs, leaves = _peel_symmetric_leaves(adj, color=color)
-    print(core_idxs)
     if leaves:
         reversed_batch.append(leaves)
         _prune_graph(adj, core_idxs)
@@ -855,9 +851,8 @@ def snap_rmsd_align_assign(
             isomorphism approach). Ignored if a custom factoring is passed.
         factoring: A custom structure factoring with indices correspond to a_struct. If a
             factoring is provided users may provide a list[Batch] where each Batch is a
-            list of Components or a simplified list[BatchLike] where each component is a list
-            of atom indices. Factoring is grouped into batches to control algorithm
-            execution e.g., [ [[0,1,2]], [[3,4]], [[5,6], [7]]]. After each batch the
+            list of Components. Factoring is grouped into batches to control algorithm
+            execution e.g., [ [[...]], [[...]], [[...], [...]]]. After each batch the
             structures are realigned.
         a_coloring: Optional list of colors for each vertex in a, e.g., [0,0,0,3,3,3]
             indicates atoms 0-2 are of one color and atoms 3-5 are a second color.
@@ -890,8 +885,8 @@ def snap_rmsd_align_assign(
             is processed. Default is False meaning that realignment is only done after
             each batch, except for the first component which must align for each proposed
             permutation to establish the initial common reference frame.
-        units: The units of the input structures' geometry and the output RMSD. Options are
-            'bohr' (default) or 'angstrom'.
+        units: The output units for the RMSD value. Options are 'bohr' (default) or 'angstrom'. Note that
+                the input structures' geometries are always in Bohr.
         cov_factor: The factor by which to multiply the sum of covalent radii when
             determining connectivity if connectivity is not provided or present in the
             Structure. Default is 1.2, which is a commonly used value for covalent
@@ -899,8 +894,9 @@ def snap_rmsd_align_assign(
 
 
     Returns:
-        (float, a_aligned, p_opt): The computed snapRMSD value, an aligned a_struct,
-            and the optimal permutation as a list of indices for a_struct onto b_struct.
+        (float, a_aligned, p_opt): The computed snapRMSD value in Bohr (default), an aligned a_struct,
+            and the optimal permutation as a list of indices for a_struct onto b_struct. Units can
+            to `angstrom` by setting the `units` parameter to 'angstrom'.
     """
     # --- 1. Build graphs, canonical label map, compute automorphism group -----------
     # NOTE: Currently running nauty 3x on A and 2x on B. Can optimize?
@@ -918,12 +914,12 @@ def snap_rmsd_align_assign(
     a_conn = (
         a_connectivity
         or a_struct.connectivity
-        or determine_connectivity(a_struct, cov_factor=cov_factor)
+        or compute_connectivity(a_struct, cov_factor=cov_factor)
     )
     b_conn = (
         b_connectivity
         or b_struct.connectivity
-        or determine_connectivity(b_struct, cov_factor=cov_factor)
+        or compute_connectivity(b_struct, cov_factor=cov_factor)
     )
     a_adj, b_adj = (
         connectivity_to_adjacency_dict(a_conn),
@@ -956,7 +952,6 @@ def snap_rmsd_align_assign(
 
     # --- 2. Factor batches ----------------------------------------------------------
     if factoring is not None:
-        # TODO: Possibly implement normalization for the simplified BatchLike format
         batches = factoring
     elif factor_depth == 0:  # Whole structure as core
         idxs = np.array(range(len(a_struct.symbols)))
@@ -1008,11 +1003,11 @@ def snap_rmsd_align_assign(
 
             # Per component and/or first component alignment (establishes frame)
             if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
-                a_geom = _align_fixed(a_geom, b_geom, p_opt)
+                a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=alignment_backend)
 
         # Realign after each batch; avoid duplicate alignments
         if align and not align_per_component and not (b_idx == 0 and c_idx == 0):
-            a_geom = _align_fixed(a_geom, b_geom, p_opt)
+            a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=alignment_backend)
 
     assert np.all(p_opt != -1), "Not all indices got fixed!."  # Sanity check while debugging # fmt: skip
     assert all(v == 1 for v in Counter(p_opt).values()), "p_opt is not a valid permutation!"  # Sanity check while debugging # fmt: skip

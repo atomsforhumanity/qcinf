@@ -1,5 +1,6 @@
 """Top-level functions for geometry-related algorithms."""
 
+import warnings as _warnings
 from collections.abc import Callable
 
 from qcdata import Structure
@@ -15,7 +16,7 @@ _RMSD_BACKEND_MAP: dict[str, Callable[..., float]] = {
 }
 
 
-def rmsd(
+def compute_rmsd(
     struct1: Structure,
     struct2: Structure,
     *,
@@ -40,11 +41,12 @@ def rmsd(
         ValueError: If the backend is not one of the supported options.
     """
     if backend == "qcinf":
-        if kwargs.get("symmetry", False):
+        if kwargs.pop("symmetry", False):
             # Use snap_rmsd
             return snap.snap_rmsd(struct1, struct2, **kwargs)
-        else:
-            # Assume atom mapping is known and use basic RMSD calculation
+        else:  # Assume atom mapping is known and use basic RMSD calculation
+            # Remove symmetry if present, since it's not used in _compute_rmsd
+            kwargs.pop("symmetry", None)
             return _compute_rmsd(struct1.geometry, struct2.geometry, **kwargs)
 
     try:
@@ -54,6 +56,23 @@ def rmsd(
             f"Unknown backend '{backend}'.  Known: {list(_RMSD_BACKEND_MAP)}"
         ) from e
     return fn(struct1, struct2, **kwargs)
+
+
+def rmsd(
+    struct1: Structure,
+    struct2: Structure,
+    *,
+    backend: str = "qcinf",
+    **kwargs,
+) -> float:
+    """Deprecated alias for :func:`compute_rmsd`."""
+    _warnings.warn(
+        "`qcinf.rmsd` has been renamed to `qcinf.compute_rmsd`; "
+        "the `rmsd` alias will be removed in a future release.",
+        FutureWarning,
+        stacklevel=2,
+    )
+    return compute_rmsd(struct1, struct2, backend=backend, **kwargs)
 
 
 _ALIGN_BACKEND_MAP: dict[str, Callable[..., tuple[Structure, float]]] = {
@@ -117,7 +136,7 @@ def filter_conformers_indices(
         if i not in filtered:
             for j in range(i + 1, len(conformers)):
                 if (
-                    rmsd(
+                    compute_rmsd(
                         conformers[i],
                         conformers[j],
                         backend=backend,

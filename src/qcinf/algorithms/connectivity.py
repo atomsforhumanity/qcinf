@@ -8,10 +8,10 @@ from qcdata import Structure
 from .connectivity_helpers import _canonical_map_pn, _to_pynauty_graph_adj_color
 
 
-def determine_connectivity(
+def compute_connectivity(
     structure: Structure, *, cov_factor: float = 1.2
 ) -> list[tuple[int, int, float]]:
-    """Determine connectivity using covalent radii.
+    """Compute connectivity using covalent radii.
 
     Two atoms are considered bonded when their distance is less than or equal to
     `cov_factor * (r_cov(i) + r_cov(j))`. Bond orders are set to 1.0 since this
@@ -89,7 +89,7 @@ def adjacency_dict(
     if structure.connectivity:
         return structure.adjacency_dict
 
-    connectivity = determine_connectivity(structure, cov_factor=cov_factor)
+    connectivity = compute_connectivity(structure, cov_factor=cov_factor)
     return connectivity_to_adjacency_dict(connectivity)
 
 
