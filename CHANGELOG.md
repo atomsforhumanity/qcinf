@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Native snapRMSD support for symmetry-aware, connectivity-preserving molecular
-  RMSD calculations:
+  RMSD calculations [#11](https://github.com/coltonbh/qcinf/pull/11) by [@coltonbh](https://github.com/coltonbh):
 
   - Added public APIs `snap_rmsd`, `snap_rmsd_align_assign`, `snap_align`,
     `snap_align_rmsd`, and `snap_assign`.
