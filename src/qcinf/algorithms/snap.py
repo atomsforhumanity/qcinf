@@ -30,7 +30,7 @@ from qcdata import LengthUnit, Structure
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 
-from .connectivity import adjacency_dict
+from .connectivity import connectivity_to_adjacency_dict, determine_connectivity
 from .connectivity_helpers import (
     _canonical_map_pn,
     _get_branch_info,
@@ -819,12 +819,14 @@ def snap_rmsd_align_assign(
     factoring: list[Batch] | None = None,
     a_coloring: list[Any] | None = None,
     b_coloring: list[Any] | None = None,
+    a_connectivity: list[tuple[int, int, float]] | None = None,
+    b_connectivity: list[tuple[int, int, float]] | None = None,
     align: bool = True,
     alignment_backend: str = "kabsch",
     align_per_component: bool = False,
     units: str | LengthUnit = "bohr",
+    cov_factor: float = 1.2,
 ) -> tuple[float, Structure, list[int]]:
-    # TODO: Add compute_connectivity_if_missing parameter?
     """
     Compute snapRMSD(a_struct -> b_struct). Returns (rmsd, a_aligned, p_opt).
 
@@ -866,6 +868,12 @@ def snap_rmsd_align_assign(
             an atom's color. If no coloring is provided the Structure's symbols array
             is used as the default coloring.
         b_coloring: Coloring for b_struct; same format as a_coloring.
+        a_connectivity: Optional list of bonded connectivity for a_struct as tuples of
+            (i, j, order) where i and j are atom indices and order is the
+            bond order (e.g., 1.0 for single, 2.0 for double). If not provided, connectivity
+            will be determined from the structure's connectivity attribute or computed using
+            covalent radii heuristics if the connectivity attribute is not present.
+        b_connectivity: Optional connectivity for b_struct; same format as a_connectivity.
         align: Whether to align the structures before computing RMSD. Default is True.
             Generally one should only set this to False if the structures should be
             compared in their absolute orientations, e.g., from a crystal structure
@@ -884,6 +892,10 @@ def snap_rmsd_align_assign(
             permutation to establish the initial common reference frame.
         units: The units of the input structures' geometry and the output RMSD. Options are
             'bohr' (default) or 'angstrom'.
+        cov_factor: The factor by which to multiply the sum of covalent radii when
+            determining connectivity if connectivity is not provided or present in the
+            Structure. Default is 1.2, which is a commonly used value for covalent
+            connectivity heuristics.
 
 
     Returns:
@@ -903,7 +915,21 @@ def snap_rmsd_align_assign(
             f"Invalid units '{units}'. Valid options are 'bohr' or 'angstrom'."
         )
     # --- Graphs & isomorphism check
-    a_adj, b_adj = adjacency_dict(a_struct), adjacency_dict(b_struct)
+    a_conn = (
+        a_connectivity
+        or a_struct.connectivity
+        or determine_connectivity(a_struct, cov_factor=cov_factor)
+    )
+    b_conn = (
+        b_connectivity
+        or b_struct.connectivity
+        or determine_connectivity(b_struct, cov_factor=cov_factor)
+    )
+    a_adj, b_adj = (
+        connectivity_to_adjacency_dict(a_conn),
+        connectivity_to_adjacency_dict(b_conn),
+    )
+
     if not a_adj or not b_adj:
         raise ValueError("Structures have no bonded connectivity.")
 

@@ -56,6 +56,24 @@ def determine_connectivity(
     return connectivity
 
 
+def connectivity_to_adjacency_dict(
+    connectivity: list[tuple[int, int, float]],
+) -> dict[int, list[int]]:
+    """Convert connectivity list to an adjacency dictionary.
+
+    Args:
+        connectivity: List of (atom_index_a, atom_index_b, bond_order) tuples.
+
+    Returns:
+        Adjacency dictionary where each key maps to bonded neighbors.
+    """
+    adjacency = defaultdict(list)
+    for i, j, _ in connectivity:
+        adjacency[i].append(j)
+        adjacency[j].append(i)
+    return dict(adjacency)
+
+
 def adjacency_dict(
     structure: Structure, *, cov_factor: float = 1.2
 ) -> dict[int, list[int]]:
@@ -72,12 +90,7 @@ def adjacency_dict(
         return structure.adjacency_dict
 
     connectivity = determine_connectivity(structure, cov_factor=cov_factor)
-    adjacency: dict[int, list[int]] = defaultdict(list)
-    for i, j, _ in connectivity:
-        adjacency[i].append(j)
-        adjacency[j].append(i)
-
-    return dict(adjacency)
+    return connectivity_to_adjacency_dict(connectivity)
 
 
 def canonical_ranks(structure: "Structure", break_ties: bool = False) -> list[int]:

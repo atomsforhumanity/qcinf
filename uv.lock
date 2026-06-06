@@ -590,8 +590,8 @@ wheels = [
 
 [[package]]
 name = "qcdata"
-version = "0.17.0"
-source = { editable = "../qcdata" }
+version = "0.17.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eval-type-backport" },
     { name = "numpy" },
@@ -601,53 +601,9 @@ dependencies = [
     { name = "toml" },
     { name = "typing-extensions" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "eval-type-backport", specifier = ">=0.2.0" },
-    { name = "ipython", marker = "extra == 'all'", specifier = ">=8.0.0" },
-    { name = "ipython", marker = "extra == 'view'", specifier = ">=8.0.0" },
-    { name = "matplotlib", marker = "extra == 'all'", specifier = ">=3.0.0" },
-    { name = "matplotlib", marker = "extra == 'view'", specifier = ">=3.0.0" },
-    { name = "numpy", specifier = ">=1.20" },
-    { name = "py3dmol", marker = "extra == 'all'", specifier = ">=2.2.1" },
-    { name = "py3dmol", marker = "extra == 'view'", specifier = ">=2.2.1" },
-    { name = "pydantic", specifier = ">=2.0.0,!=2.0.1,!=2.1.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "qcconst", specifier = ">=0.2.1" },
-    { name = "qcinf", marker = "extra == 'all'", specifier = ">=0.1.1" },
-    { name = "qcinf", marker = "extra == 'view'", specifier = ">=0.1.1" },
-    { name = "rdkit", marker = "extra == 'all'", specifier = ">=2022.3.3" },
-    { name = "rdkit", marker = "extra == 'view'", specifier = ">=2022.3.3" },
-    { name = "toml", specifier = ">=0.10.2" },
-    { name = "typing-extensions", specifier = ">=4.7.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jupyterlab", specifier = ">=4.2.4" },
-    { name = "matplotlib", specifier = ">=3.0.0" },
-    { name = "mypy", specifier = ">=1.1.1" },
-    { name = "pint", specifier = ">=0.24.4" },
-    { name = "pre-commit", specifier = ">=3.2.1" },
-    { name = "py3dmol", specifier = ">=2.2.1" },
-    { name = "pytest", specifier = ">=7.2.2" },
-    { name = "pytest-cov", specifier = ">=4.0.0" },
-    { name = "qcelemental", specifier = ">=0.26.0" },
-    { name = "qcinf", extras = ["all"], specifier = ">=0.2.1" },
-    { name = "rdkit", specifier = ">=2022.9.5" },
-    { name = "ruff", specifier = ">=0.10.1" },
-    { name = "types-pyyaml", specifier = ">=6.0.12.10" },
-    { name = "types-toml", specifier = ">=0.10.8.6" },
-]
-docs = [
-    { name = "markdown-include", specifier = ">=0.8.1" },
-    { name = "mkdocs", specifier = ">=1.6.0" },
-    { name = "mkdocs-exclude", specifier = ">=1.0.2" },
-    { name = "mkdocs-material", specifier = ">=9.5.30" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.25.2" },
-    { name = "mknotebooks", specifier = ">=0.8.0" },
-    { name = "pymdown-extensions", specifier = ">=10.8.1" },
+sdist = { url = "https://files.pythonhosted.org/packages/0f/8a/dfab8faf362221195596715d25c9fa79f57ed2b8097774edc1a45ac33c4c/qcdata-0.17.1.tar.gz", hash = "sha256:baa29e02ddec53f35f5ddb3f54f6f295cca791e582e42cf0ecbeb518e194d592", size = 1480264 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/c8/3834050d3efe80c592aaa9a93ef8b4f8dc9a90f3f445ddad851ed5eb034a/qcdata-0.17.1-py3-none-any.whl", hash = "sha256:a6b68b9e8dee7a9bfdea37e2d0a15f47d2d9e83a694368d092be35d7b807678e", size = 38097 },
 ]
 
 [[package]]
@@ -701,7 +657,7 @@ requires-dist = [
     { name = "pydantic", specifier = "~=2.0,!=2.0.1,!=2.1.0" },
     { name = "pynauty", specifier = ">=2.8.8.1" },
     { name = "qcconst", specifier = ">=0.2.1" },
-    { name = "qcdata", editable = "../qcdata" },
+    { name = "qcdata", specifier = ">=0.17.0" },
     { name = "rdkit", marker = "extra == 'all'", specifier = ">=2024.9.6" },
     { name = "rdkit", marker = "extra == 'rdkit'", specifier = ">=2024.9.6" },
     { name = "rustworkx", specifier = ">=0.17.1" },

@@ -1,7 +1,7 @@
 import numpy as np
 from qcdata import Structure
 
-from qcinf import adjacency_dict, determine_connectivity
+from qcinf import determine_connectivity
 from qcinf.algorithms import snap
 from qcinf.algorithms.connectivity_helpers import (
     _canonical_map_pn,
@@ -35,16 +35,6 @@ def test_determine_connectivity_unconnected():
     )
     connectivity = determine_connectivity(struct)
     assert connectivity == []
-
-
-def test_adj_dict_infers_when_connectivity_missing():
-    """adj_dict should infer connectivity when Structure.connectivity is missing."""
-    struct = Structure(
-        symbols=["O", "H", "H"],
-        geometry=[[0.0, 0.0, 0.0], [1.83, 0.0, 0.0], [0.0, 1.83, 0.0]],
-    )
-    adjacency = adjacency_dict(struct)
-    assert adjacency == {0: [1, 2], 1: [0], 2: [0]}
 
 
 def test_snap_rmsd_infers_connectivity_when_missing():

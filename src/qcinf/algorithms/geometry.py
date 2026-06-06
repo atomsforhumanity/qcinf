@@ -7,6 +7,7 @@ from qcdata import Structure
 from qcinf._backends import rdkit
 
 from . import snap
+from .geometry_kernels import _compute_rmsd
 
 _RMSD_BACKEND_MAP: dict[str, Callable[..., float]] = {
     "qcinf": snap.snap_rmsd,
@@ -38,6 +39,14 @@ def rmsd(
     Raises:
         ValueError: If the backend is not one of the supported options.
     """
+    if backend == "qcinf":
+        if kwargs.get("symmetry", False):
+            # Use snap_rmsd
+            return snap.snap_rmsd(struct1, struct2, **kwargs)
+        else:
+            # Assume atom mapping is known and use basic RMSD calculation
+            return _compute_rmsd(struct1.geometry, struct2.geometry, **kwargs)
+
     try:
         fn = _RMSD_BACKEND_MAP[backend.lower()]
     except KeyError as e:

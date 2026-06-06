@@ -29,7 +29,7 @@ def test_rmsd_identical_structures():
     )
 
 
-def test_rmsd_rotated_structures():
+def test_rmsd_rotated_structures_rdkit():
     """Test that RMSD between rotated structures is zero when aligned."""
     symbols = ["O", "H", "H"]
     geometry = (
@@ -58,13 +58,13 @@ def test_rmsd_rotated_structures():
     struct2 = Structure(symbols=symbols, geometry=rotated_geometry)
 
     # Aligned by atom index (which match in this case)
-    calculated_rmsd_no_align = rmsd(struct1, struct2, symmetry=False)
+    calculated_rmsd_no_align = rmsd(struct1, struct2, symmetry=False, backend="rdkit")
     assert np.isclose(calculated_rmsd_no_align, 0.0, atol=1e-6), (
         "RMSD should be zero after alignment"
     )
 
     # With alignment
-    calculated_rmsd_align = rmsd(struct1, struct2, symmetry=True)
+    calculated_rmsd_align = rmsd(struct1, struct2, symmetry=True, backend="rdkit")
     assert np.isclose(calculated_rmsd_align, 0.0, atol=1e-6), (
         "RMSD should be zero after alignment"
     )
@@ -130,7 +130,7 @@ def test_align_rotated_structure():
     )
 
 
-def test_align_with_atom_reordering():
+def test_align_with_atom_reordering_rdkit():
     """Test aligning structures with atom reordering allowed."""
     symbols1 = ["C", "H", "H", "H", "Cl"]
     geometry1 = (
@@ -153,7 +153,9 @@ def test_align_with_atom_reordering():
     struct2 = Structure(symbols=symbols2, geometry=geometry2)
 
     # Without atom reordering
-    aligned_struct_no_reorder, rmsd_no_reorder = align(struct1, struct2, symmetry=False)
+    aligned_struct_no_reorder, rmsd_no_reorder = align(
+        struct1, struct2, symmetry=False, backend="rdkit"
+    )
     assert aligned_struct_no_reorder.symbols == struct1.symbols, (
         "Symbols should not be reordered"
     )
@@ -161,8 +163,12 @@ def test_align_with_atom_reordering():
     assert rmsd_no_reorder > 0.1, "RMSD should be high without atom reordering"
 
     # With atom reordering
-    aligned_struct_reorder, rmsd_reorder = align(struct1, struct2, symmetry=True)
-    rmsd_reorder = rmsd(aligned_struct_reorder, struct2, symmetry=False)
+    aligned_struct_reorder, rmsd_reorder = align(
+        struct1, struct2, symmetry=True, backend="rdkit"
+    )
+    rmsd_reorder = rmsd(
+        aligned_struct_reorder, struct2, symmetry=False, backend="rdkit"
+    )
     assert aligned_struct_reorder.symbols == struct2.symbols, (
         "Symbols should be reordered"
     )
@@ -207,7 +213,7 @@ def test_align_raises_value_error_reorder_different_atom_count_if_symmetry():
         align(struct2, struct1, symmetry=True)
 
 
-def test_rmsd_with_numthreads():
+def test_rmsd_with_numthreads_rdkit():
     """Test RMSD calculation with multiple threads."""
     symbols = ["O", "H", "H"]
     geometry = (
@@ -224,8 +230,12 @@ def test_rmsd_with_numthreads():
     struct1 = Structure(symbols=symbols, geometry=geometry)
     struct2 = Structure(symbols=symbols, geometry=geometry)
 
-    rmsd_single_thread = rmsd(struct1, struct2, symmetry=True, numthreads=1)
-    rmsd_multi_thread = rmsd(struct1, struct2, symmetry=True, numthreads=4)
+    rmsd_single_thread = rmsd(
+        struct1, struct2, symmetry=True, numthreads=1, backend="rdkit"
+    )
+    rmsd_multi_thread = rmsd(
+        struct1, struct2, symmetry=True, numthreads=4, backend="rdkit"
+    )
 
     assert np.isclose(rmsd_single_thread, 0.0, atol=1e-6), (
         "RMSD should be zero with single thread"

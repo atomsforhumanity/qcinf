@@ -87,6 +87,3 @@ filterwarnings = [
     "ignore:builtin type SwigPy.*has no __module__ attribute:DeprecationWarning",
     "ignore:builtin type swigvarlink.*has no __module__ attribute:DeprecationWarning",
 ]
-
-[tool.uv.sources]
-qcdata = { path = "../qcdata", editable = true }
