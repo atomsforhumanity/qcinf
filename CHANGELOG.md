@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.3.0] - 2026-06-06
+
 ### Added
 
 - Native snapRMSD support for symmetry-aware, connectivity-preserving molecular
@@ -89,7 +91,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Setup all DevOps workflows and basic package setup.
 - Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcdata` into this repo.
 
-[unreleased]: https://github.com/coltonbh/qcinf/compare/0.2.1...HEAD
+[unreleased]: https://github.com/coltonbh/qcinf/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/coltonbh/qcinf/releases/tag/0.3.0
 [0.2.1]: https://github.com/coltonbh/qcinf/releases/tag/0.2.1
 [0.2.0]: https://github.com/coltonbh/qcinf/releases/tag/0.2.0
 [0.1.1]: https://github.com/coltonbh/qcinf/releases/tag/0.1.1
