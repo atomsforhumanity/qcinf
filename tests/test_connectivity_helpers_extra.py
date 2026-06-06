@@ -1,5 +1,3 @@
-import numpy as np
-
 from qcinf.algorithms.connectivity_helpers import _get_branch_info, _list_of_sets
 
 
@@ -40,10 +38,10 @@ def test_get_branch_info_changes_signature_when_colors_differ() -> None:
         3: {0, 4},
         4: {3},
     }
-    color = np.zeros(5, dtype=int)
+    color: list[int] = [0] * 5
     color[2] = 7  # only one branch leaf differs
 
-    _, sig1 = _get_branch_info(adj, parent=0, root=1, color=color.tolist())
-    _, sig2 = _get_branch_info(adj, parent=0, root=3, color=color.tolist())
+    _, sig1 = _get_branch_info(adj, parent=0, root=1, color=color)
+    _, sig2 = _get_branch_info(adj, parent=0, root=3, color=color)
 
     assert sig1 != sig2

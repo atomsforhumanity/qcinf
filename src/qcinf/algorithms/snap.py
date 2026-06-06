@@ -19,7 +19,7 @@ import copy
 import itertools as it
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -136,7 +136,8 @@ def _cycles(adj: dict[int, set[int]]) -> list[set[int]]:
 
     # Build rustworkx graph + find bridges
     g = _rx_graph_from_adj(adj)
-    bridges = {_edge_key(*edge) for edge in rx.bridges(g)}
+    bridge_edges = cast(Iterable[tuple[int, int]], rx.bridges(g))
+    bridges = {_edge_key(u, v) for u, v in bridge_edges}
 
     # Build graph with only non-bridge edges (i.e., cycle edges)
     g_cycle = rx.PyGraph(multigraph=False)
@@ -558,8 +559,8 @@ def _factor_plan_recursive(
     _recur(depth - 1)
 
     # Core is whatever remains after factoring
-    core_idxs = np.array(sorted(adj.keys()), dtype=int)
-    core = Component(parent_idx=None, leaves=False, idxs=core_idxs)
+    core_array = np.array(sorted(adj.keys()), dtype=np.int64)
+    core = Component(parent_idx=None, leaves=False, idxs=core_array)
     return [[core], *reversed(reversed_batch)]
 
 
