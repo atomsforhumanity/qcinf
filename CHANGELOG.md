@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Native snapRMSD support for symmetry-aware, connectivity-preserving molecular
+  RMSD calculations [#11](https://github.com/coltonbh/qcinf/pull/11) by [@coltonbh](https://github.com/coltonbh):
+
+  - Added public APIs `snap_rmsd`, `snap_rmsd_align_assign`, `snap_align`,
+    `snap_align_rmsd`, and `snap_assign`.
+  - Added graph factoring support for core/peripheral decomposition, including
+    symmetric leaves, repeated branches, and peripheral cyclic components.
+  - Added canonical graph mapping and automorphism-based assignment helpers for
+    matching isomorphic molecular graphs while preserving atom colors and bonded
+    connectivity.
+  - Added support for inferred connectivity when a `Structure` does not already
+    include bonded connectivity, with optional explicit `a_connectivity` and
+    `b_connectivity` overrides.
+  - Added Kabsch and QCP alignment backend support within snapRMSD scoring and
+    alignment workflows.
+
 - Kabsch algorithm for determining the optimal rotation matrix to align two structures and compute an optimally aligned RMSD.
 - High-performance Quaternion Characteristic Polynomial (QCP) RMSD/alignment backend as an alternative using a numba-compiled kernel:
 
@@ -23,13 +39,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `rotation_matrix(axis, angle_deg)` for constructing analytic rotation matrices.
   - `rotate_structure(struct, axis, angle_deg)` for generating rotated structures.
 
-- `determine_connectivity` function that computes `Structure` connectivity using covalent radii and a scaling factor. Bond order is set to 1.0 for all bonds since this routine only infers connectivity.
+- `compute_connectivity` function that computes `Structure` connectivity using covalent radii and a scaling factor. Bond order is set to 1.0 for all bonds since this routine only infers connectivity.
   ```python
-  >>> from qcinf import determine_connectivity, smiles_to_structure
+  >>> from qcinf import compute_connectivity, smiles_to_structure
   >>> struct = smiles_to_structure("O")
-  >>> determine_connectivity(struct, cov_factor=1.2) # cov_factor is optional and 1.2 by default
+  >>> compute_connectivity(struct, cov_factor=1.2) # cov_factor is optional and 1.2 by default
   [(0, 1, 1.0), (0, 2, 1.0)]
   ```
+
+### Changed
+
+- Renamed the top-level `rmsd` function to `compute_rmsd` to avoid conflicts
+  with common local variable names. The old `rmsd` name remains as a deprecated
+  alias that emits a `FutureWarning` and delegates to `compute_rmsd`.
+- Updated `filter_conformers_indices` to call `compute_rmsd` internally.
+- Updated the README with snapRMSD usage examples and guidance for connectivity,
+  assignment, alignment, factoring depth, and the QCP alignment backend.
 
 ## [0.2.1] - 2025-10-27
 
@@ -55,14 +80,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- `filter_conformers_indices` function to better serve the existing requirements of `qcio.view` setup.
+- `filter_conformers_indices` function to better serve the existing requirements of `qcdata.view` setup.
 
 ## [0.1.0] - 2025-06-01
 
 ### Added
 
 - Setup all DevOps workflows and basic package setup.
-- Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcio` into this repo.
+- Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcdata` into this repo.
 
 [unreleased]: https://github.com/coltonbh/qcinf/compare/0.2.1...HEAD
 [0.2.1]: https://github.com/coltonbh/qcinf/releases/tag/0.2.1

@@ -1,7 +1,7 @@
 import warnings
 
 import numpy as np
-from qcio import Structure
+from qcdata import Structure
 
 from qcinf.exceptions import NumbaUnavailableError
 
@@ -130,7 +130,7 @@ def _compute_rmsd(
     *,
     align: bool = True,
     proper_only: bool = True,
-    backend: str = "qcp",
+    backend: str = "kabsch",
 ) -> float:
     """
     Compute the RMSD between two sets of coordinates, optionally with alignment.
@@ -143,9 +143,8 @@ def _compute_rmsd(
             inversions; det(R) = 1). Only used if align is True. Only relevant for
             the 'kabsch' backend.
         backend: The backend to use for alignment. Options are
-            'qcp' (default, numba accelerated) or 'kabsch'. Backend only matters if
-            align is True. Both will compute the same answer. qcp uses a
-            numba-accelerated kernel.
+            'kabsch' (default) or 'qcp' (numba accelerated). Backend only matters if
+            align is True. Both will compute the same answer.
 
     Returns:
         float: The RMSD value.
@@ -156,20 +155,20 @@ def _compute_rmsd(
     assert backend in supported_backends, f"Unsupported backend '{backend}'. Supported: {supported_backends}"  # fmt: skip
 
     if align:
-        if backend == "qcp":
-            # Use QCP to get optimal rotation rmsd
-            _, _, _, rmsd = qcp_rotation_and_rmsd(coords1, coords2)
-            return rmsd
-        else:
+        if backend == "kabsch":
             # Align coords1 to coords2 using the Kabsch algorithm
             R, cP, cQ = kabsch(coords1, coords2, proper_only=proper_only)
             # Rotate coords1 and translate to the centroid of coords2
             coords1 = (coords1 - cP) @ R.T + cQ
+        else:  # backend == "qcp"
+            # Use QCP to get optimal rotation rmsd
+            _, _, _, rmsd = qcp_rotation_and_rmsd(coords1, coords2)
+            return rmsd
 
     # Compute the difference between the two arrays
     diff = coords1 - coords2
     # Sum squared differences for each atom (row) and average over all atoms
-    return np.sqrt(np.mean(np.sum(diff**2, axis=1)))
+    return float(np.sqrt(np.mean(np.sum(diff**2, axis=1))))
 
 
 def rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:

@@ -8,7 +8,7 @@ from typing import TypeVar
 
 import numpy as np
 from qcconst import constants
-from qcio import LengthUnit, Structure
+from qcdata import LengthUnit, Structure
 from typing_extensions import ParamSpec
 
 from .utils import mute_c_stderr

@@ -1,21 +1,26 @@
 """Top-level functions for geometry-related algorithms."""
 
+import warnings as _warnings
 from collections.abc import Callable
 
-from qcio import Structure
+from qcdata import Structure
 
 from qcinf._backends import rdkit
 
+from . import snap
+from .geometry_kernels import _compute_rmsd
+
 _RMSD_BACKEND_MAP: dict[str, Callable[..., float]] = {
+    "qcinf": snap.snap_rmsd,
     "rdkit": rdkit._rmsd_rdkit,
 }
 
 
-def rmsd(
+def compute_rmsd(
     struct1: Structure,
     struct2: Structure,
     *,
-    backend: str = "rdkit",
+    backend: str = "qcinf",
     **kwargs,
 ) -> float:
     """Calculate the root mean square deviation (RMSD) between two structures.
@@ -23,7 +28,7 @@ def rmsd(
     Args:
         struct1: The first structure.
         struct2: The second structure.
-        backend: The backend to use for the RMSD calculation. Can be 'rdkit'.
+        backend: The backend to use for the RMSD calculation. Can be 'qcinf' or'rdkit'.
         **kwargs: Backend-specific additional keywords to pass to the RMSD calculation
             function. This can include options like 'symmetry' for symmetry-based RMSD
             calculations. The specific options depend on the backend used. See
@@ -35,6 +40,15 @@ def rmsd(
     Raises:
         ValueError: If the backend is not one of the supported options.
     """
+    if backend == "qcinf":
+        if kwargs.pop("symmetry", False):
+            # Use snap_rmsd
+            return snap.snap_rmsd(struct1, struct2, **kwargs)
+        else:  # Assume atom mapping is known and use basic RMSD calculation
+            # Remove symmetry if present, since it's not used in _compute_rmsd
+            kwargs.pop("symmetry", None)
+            return _compute_rmsd(struct1.geometry, struct2.geometry, **kwargs)
+
     try:
         fn = _RMSD_BACKEND_MAP[backend.lower()]
     except KeyError as e:
@@ -44,8 +58,26 @@ def rmsd(
     return fn(struct1, struct2, **kwargs)
 
 
+def rmsd(
+    struct1: Structure,
+    struct2: Structure,
+    *,
+    backend: str = "qcinf",
+    **kwargs,
+) -> float:
+    """Deprecated alias for :func:`compute_rmsd`."""
+    _warnings.warn(
+        "`qcinf.rmsd` has been renamed to `qcinf.compute_rmsd`; "
+        "the `rmsd` alias will be removed in a future release.",
+        FutureWarning,
+        stacklevel=2,
+    )
+    return compute_rmsd(struct1, struct2, backend=backend, **kwargs)
+
+
 _ALIGN_BACKEND_MAP: dict[str, Callable[..., tuple[Structure, float]]] = {
     "rdkit": rdkit._align_rdkit,
+    "qcinf": snap.snap_align_rmsd,
 }
 
 
@@ -104,7 +136,7 @@ def filter_conformers_indices(
         if i not in filtered:
             for j in range(i + 1, len(conformers)):
                 if (
-                    rmsd(
+                    compute_rmsd(
                         conformers[i],
                         conformers[j],
                         backend=backend,

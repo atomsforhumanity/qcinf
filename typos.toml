@@ -1,2 +1,5 @@
 [files]
 extend-exclude = ["src/qcinf/pt_data/**", "tests/test_pt.py"]
+
+[default.extend-words]
+pn = "pn"

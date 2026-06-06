@@ -30,8 +30,8 @@ def test_smiles_to_structure():
     assert struct.identifiers.canonical_smiles == "CCO"
     assert struct.connectivity == [
         (0, 1, 1.0),
-        (1, 2, 1.0),
         (0, 3, 1.0),
+        (1, 2, 1.0),
         (1, 4, 1.0),
         (1, 5, 1.0),
         (2, 6, 1.0),
@@ -44,15 +44,15 @@ def test_smiles_to_structure_aromaticity_connectivity():
     struct = _smiles_to_structure_rdkit("c1ccccc1")  # benzene
     assert struct.connectivity == [
         (0, 1, 1.5),
-        (1, 2, 1.5),
-        (2, 3, 1.5),
-        (3, 4, 1.5),
-        (4, 5, 1.5),
-        (5, 0, 1.5),
+        (0, 5, 1.5),
         (0, 6, 1.0),
+        (1, 2, 1.5),
         (1, 7, 1.0),
+        (2, 3, 1.5),
         (2, 8, 1.0),
+        (3, 4, 1.5),
         (3, 9, 1.0),
+        (4, 5, 1.5),
         (4, 10, 1.0),
         (5, 11, 1.0),
     ]
