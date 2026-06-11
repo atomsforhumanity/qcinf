@@ -770,6 +770,7 @@ def _aligned_rmsd_for_candidate(
     a_comp_idxs: npt.NDArray[np.int64],
     b_comp_perm: npt.NDArray[np.int64],
     backend: str = "kabsch",
+    allow_inversions: bool = False,
 ) -> float:
     """Compute RMSD after aligning A to B using fixed + component indices."""
     # score on fixed ∪ C, with a per-candidate temporary alignment
@@ -780,6 +781,7 @@ def _aligned_rmsd_for_candidate(
         a_geom[a_fixed_plus_component],
         b_geom[b_fixed_plus_component],
         align=True,
+        allow_inversions=allow_inversions,
         backend=backend,
     )
 
@@ -789,12 +791,15 @@ def _align_fixed(
     b_coords: np.ndarray,
     p_opt: np.ndarray,
     alignment_backend: str = "kabsch",
+    allow_inversions: bool = False,
 ) -> np.ndarray:
     """Return a copy of `a_coords` aligned to `b_coords` using fixed pairs."""
     fixed = p_opt != -1
 
     if alignment_backend == "kabsch":
-        R, cA, cB = kabsch(a_coords[fixed], b_coords[p_opt[fixed]])
+        R, cA, cB = kabsch(
+            a_coords[fixed], b_coords[p_opt[fixed]], allow_inversions=allow_inversions
+        )
     elif alignment_backend == "qcp":
         R, cA, cB = qcp_rotation(a_coords[fixed], b_coords[p_opt[fixed]])
     else:
@@ -820,6 +825,7 @@ def snap_rmsd_align_assign(
     b_connectivity: list[tuple[int, int, float]] | None = None,
     align: bool = True,
     alignment_backend: str = "kabsch",
+    allow_inversions: bool = False,
     align_per_component: bool = False,
     units: str | LengthUnit = "bohr",
     cov_factor: float = 1.2,
@@ -882,6 +888,10 @@ def snap_rmsd_align_assign(
             to load the function from cache. Subsequent calls are much faster than
             `kabsch`. The break-even point where `qcp` becomes faster than `kabsch` is
             usually around ~100-200 RMSD calculations depending on system size.
+        allow_inversions: Whether to allow improper rotations/reflections during
+            alignment. If True, snapRMSD uses the Kabsch backend for alignment even
+            when `alignment_backend="qcp"` is requested, since the QCP backend only
+            supports proper rotations.
         align_per_component: Whether to realign the structures after each factored component
             is processed. Default is False meaning that realignment is only done after
             each batch, except for the first component which must align for each proposed
@@ -911,6 +921,7 @@ def snap_rmsd_align_assign(
         raise ValueError(
             f"Invalid units '{units}'. Valid options are 'bohr' or 'angstrom'."
         )
+    effective_alignment_backend = "kabsch" if allow_inversions else alignment_backend
     # --- Graphs & isomorphism check
     a_conn = (
         a_connectivity
@@ -990,7 +1001,7 @@ def snap_rmsd_align_assign(
 
                 if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
                     # Align per-candidate; use fixed + component indices
-                    score = _aligned_rmsd_for_candidate(a_geom, b_geom, p_opt, a_comp_idxs, b_comp_perm, backend=alignment_backend)  # fmt: skip
+                    score = _aligned_rmsd_for_candidate(a_geom, b_geom, p_opt, a_comp_idxs, b_comp_perm, backend=effective_alignment_backend, allow_inversions=allow_inversions)  # fmt: skip
                 else:
                     # No alignment; direct RMSD on component given established frame
                     score = _compute_rmsd(a_geom[a_comp_idxs], b_geom[b_comp_perm], align=False)  # fmt: skip
@@ -1004,11 +1015,11 @@ def snap_rmsd_align_assign(
 
             # Per component and/or first component alignment (establishes frame)
             if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
-                a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=alignment_backend)
+                a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=effective_alignment_backend, allow_inversions=allow_inversions)
 
         # Realign after each batch; avoid duplicate alignments
         if align and not align_per_component and not (b_idx == 0 and c_idx == 0):
-            a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=alignment_backend)
+            a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=effective_alignment_backend, allow_inversions=allow_inversions)
 
     assert np.all(p_opt != -1), "Not all indices got fixed!."  # Sanity check while debugging # fmt: skip
     assert all(v == 1 for v in Counter(p_opt).values()), "p_opt is not a valid permutation!"  # Sanity check while debugging # fmt: skip
