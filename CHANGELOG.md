@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+### Added
+
+- Added `allow_inversions` to snapRMSD alignment. When enabled, snapRMSD allows
+  Kabsch reflections/improper rotations and uses the Kabsch backend even if
+  `alignment_backend="qcp"` is requested.
+
+### Changed
+
+- Updated the Kabsch keyword argument from `proper_only` to
+  `allow_inversions`.
+- Updated the private `_compute_rmsd` keyword argument from `proper_only` to
+  `allow_inversions` for consistent inversion terminology.
+
 ## [0.3.0] - 2026-06-06
 
 ### Added

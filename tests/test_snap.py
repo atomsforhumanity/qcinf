@@ -429,6 +429,48 @@ def test_align_fixed_aligns_rotated_and_translated_coordinates() -> None:
     np.testing.assert_allclose(aligned, b_coords, atol=1e-10)
 
 
+def test_snap_allow_inversions_forces_kabsch_when_qcp_requested() -> None:
+    struct = Structure(
+        symbols=["C", "N", "O", "F"],
+        geometry=[
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        connectivity=[(0, 1, 1.0), (0, 2, 1.0), (0, 3, 1.0)],
+    )
+    mirrored = struct.model_copy(
+        update={
+            "geometry": np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 0.0, 1.0],
+                ]
+            )
+        },
+        deep=True,
+    )
+
+    proper_only_rmsd = snap.snap_rmsd(
+        struct, mirrored, factor_depth=0, alignment_backend="kabsch"
+    )
+    inversion_rmsd, aligned, p_opt = snap.snap_rmsd_align_assign(
+        struct,
+        mirrored,
+        factor_depth=0,
+        alignment_backend="qcp",
+        allow_inversions=True,
+    )
+
+    assert proper_only_rmsd > 0.1
+    assert inversion_rmsd == pytest.approx(0.0, abs=1e-10)
+    assert p_opt == [0, 1, 2, 3]
+    np.testing.assert_allclose(aligned.geometry, mirrored.geometry, atol=1e-10)
+
+
 def test_align_fixed_raises_on_unknown_backend() -> None:
     a = np.array([[0.0, 0.0, 0.0]])
     b = np.array([[0.0, 0.0, 0.0]])

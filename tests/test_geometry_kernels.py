@@ -42,7 +42,7 @@ def test_kabsch_recovers_known_rotation(axis, angle):
     s = smiles_to_structure("CCO")  # small but nontrivial
     s_rot = rotate_structure(s, axis, angle)
 
-    R_k, cP_k, cQ_k = kabsch(s_rot.geometry, s.geometry, proper_only=True)
+    R_k, cP_k, cQ_k = kabsch(s_rot.geometry, s.geometry, allow_inversions=True)
     aligned = (s_rot.geometry - cP_k) @ R_k.T + cQ_k
 
     # Kabsch should align rotated structure back onto the original
@@ -72,7 +72,7 @@ def test_qcp_rmsd_matches_kabsch(smiles):
     Q = s1.geometry
 
     # Reference: Kabsch RMSD
-    R_k, cP_k, cQ_k = kabsch(P, Q, proper_only=True)
+    R_k, cP_k, cQ_k = kabsch(P, Q, allow_inversions=False)
     P_aligned_k = (P - cP_k) @ R_k.T + cQ_k
     rmsd_k = _compute_rmsd(P_aligned_k, Q, align=False)
 

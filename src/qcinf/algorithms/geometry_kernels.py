@@ -9,7 +9,7 @@ from .kernels._qcp_numba_kernel import _qcp_rotation_rmsd_numba
 
 
 def kabsch(
-    P: np.ndarray, Q: np.ndarray, proper_only: bool = True
+    P: np.ndarray, Q: np.ndarray, allow_inversions: bool = False
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute the optimal rotation matrix that aligns P onto Q using the Kabsch algorithm.
@@ -19,7 +19,7 @@ def kabsch(
     Args:
         P (np.ndarray): An N x 3 array of coordinates (the structure to rotate).
         Q (np.ndarray): An N x 3 array of coordinates (the reference structure).
-        proper_only (bool): If True, ensure the rotation is a proper rotation (det(R) = 1).
+        allow_inversions (bool): If True, allow inversions (reflections) in the rotation.
 
     Returns:
         R (np.ndarray): The optimal 3x3 rotation matrix.
@@ -47,7 +47,7 @@ def kabsch(
     R = Vt.T @ U.T
 
     # Correct for reflection (ensure a proper rotation with det(R)=1)
-    if proper_only and np.linalg.det(R) < 0:
+    if not allow_inversions and np.linalg.det(R) < 0:
         Vt[-1, :] *= -1
         R = Vt.T @ U.T
 
@@ -94,7 +94,7 @@ def qcp_rotation_and_rmsd(
             RuntimeWarning,
             stacklevel=2,
         )
-        R, cP, cQ = kabsch(P, Q, proper_only=True)
+        R, cP, cQ = kabsch(P, Q, allow_inversions=True)
         diff = (P - cP) @ R.T + cQ - Q
         rmsd = np.sqrt(np.mean(np.sum(diff**2, axis=1)))
         return R, cP, cQ, rmsd
@@ -129,7 +129,7 @@ def _compute_rmsd(
     coords2: np.ndarray,
     *,
     align: bool = True,
-    proper_only: bool = True,
+    allow_inversions: bool = False,
     backend: str = "kabsch",
 ) -> float:
     """
@@ -139,8 +139,7 @@ def _compute_rmsd(
         coords1: An N x 3 array of coordinates.
         coords2: An N x 3 array of coordinates.
         align: If True, optimally align coords1 to coords2 before computing RMSD.
-        proper_only: If True, ensure the Kabsch rotation is a proper rotation (avoid
-            inversions; det(R) = 1). Only used if align is True. Only relevant for
+        allow_inversions: If True, allow inversions in the Kabsch rotation. Only used if align is True. Only relevant for
             the 'kabsch' backend.
         backend: The backend to use for alignment. Options are
             'kabsch' (default) or 'qcp' (numba accelerated). Backend only matters if
@@ -157,7 +156,7 @@ def _compute_rmsd(
     if align:
         if backend == "kabsch":
             # Align coords1 to coords2 using the Kabsch algorithm
-            R, cP, cQ = kabsch(coords1, coords2, proper_only=proper_only)
+            R, cP, cQ = kabsch(coords1, coords2, allow_inversions=allow_inversions)
             # Rotate coords1 and translate to the centroid of coords2
             coords1 = (coords1 - cP) @ R.T + cQ
         else:  # backend == "qcp"
