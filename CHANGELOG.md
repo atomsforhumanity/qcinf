@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+- Updated GitHub references from `coltonbh` to `atomsforhumanity`.
+
 ## [0.4.0] - 2026-06-11
 
 ### Added
@@ -26,8 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Native snapRMSD support for symmetry-aware, connectivity-preserving molecular
-  RMSD calculations [#11](https://github.com/coltonbh/qcinf/pull/11) by [@coltonbh](https://github.com/coltonbh):
-
+  RMSD calculations [#11](https://github.com/atomsforhumanity/qcinf/pull/11) by [@coltonbh](https://github.com/coltonbh):
   - Added public APIs `snap_rmsd`, `snap_rmsd_align_assign`, `snap_align`,
     `snap_align_rmsd`, and `snap_assign`.
   - Added graph factoring support for core/peripheral decomposition, including
@@ -43,7 +44,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Kabsch algorithm for determining the optimal rotation matrix to align two structures and compute an optimally aligned RMSD.
 - High-performance Quaternion Characteristic Polynomial (QCP) RMSD/alignment backend as an alternative using a numba-compiled kernel:
-
   - Implements Theobald’s direct RMSD evaluation and Liu’s adjoint quaternion method for efficient rotation extraction.
   - Provides `qcp_rotation_and_rmsd`, `qcp_rotation`, and `qcp_rmsd` as interfaces to the high performance numba kernel.
   - Achieves ~15x performance improvements over the pure-Python Kabsch implementation while maintaining numerical correctness (the ~15x speedup is basically constant across structure size since the speedup is relative to a constant factor of SVD on a 3x3 matrix).
@@ -52,7 +52,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - Added optional dependency group `qcinf[fast]` to install numba acceleration.
 
 - New utility functions:
-
   - `rotation_matrix(axis, angle_deg)` for constructing analytic rotation matrices.
   - `rotate_structure(struct, axis, angle_deg)` for generating rotated structures.
 
@@ -77,13 +76,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- `Structure.connectivity` information when creating a `Structure` using `smiles_to_structure`. [#7](https://github.com/coltonbh/qcinf/pull/7)
+- `Structure.connectivity` information when creating a `Structure` using `smiles_to_structure`. [#7](https://github.com/atomsforhumanity/qcinf/pull/7)
 
 ## [0.2.0] - 2025-10-07
 
 ### Fixed
 
-- `RDKit` backend raising `NameError` because `Mol` object was not defined if `rdkit` was not installed. With deferred evaluation it now correctly raises the `ModuleNotFoundError` when top-level functions try to use `rdkit` if it's not installed. [#6](https://github.com/coltonbh/qcinf/pull/6)
+- `RDKit` backend raising `NameError` because `Mol` object was not defined if `rdkit` was not installed. With deferred evaluation it now correctly raises the `ModuleNotFoundError` when top-level functions try to use `rdkit` if it's not installed. [#6](https://github.com/atomsforhumanity/qcinf/pull/6)
 
 ### Changed
 
@@ -106,10 +105,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Setup all DevOps workflows and basic package setup.
 - Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcdata` into this repo.
 
-[unreleased]: https://github.com/coltonbh/qcinf/compare/0.4.0...HEAD
-[0.4.0]: https://github.com/coltonbh/qcinf/releases/tag/0.4.0
-[0.3.0]: https://github.com/coltonbh/qcinf/releases/tag/0.3.0
-[0.2.1]: https://github.com/coltonbh/qcinf/releases/tag/0.2.1
-[0.2.0]: https://github.com/coltonbh/qcinf/releases/tag/0.2.0
-[0.1.1]: https://github.com/coltonbh/qcinf/releases/tag/0.1.1
-[0.1.0]: https://github.com/coltonbh/qcinf/releases/tag/0.1.0
+[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.0
+[0.3.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.3.0
+[0.2.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.2.1
+[0.2.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.2.0
+[0.1.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.1.1
+[0.1.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.1.0
