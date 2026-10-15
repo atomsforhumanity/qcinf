@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 import numpy as np
-from qcdata import LengthUnit, Structure
+from qcdata import Identifiers, LengthUnit, Structure
 from qcref import constants
 from typing_extensions import ParamSpec
 
@@ -333,11 +333,11 @@ def _smiles_to_structure_rdkit(
         symbols=atoms,
         geometry=geometry_bohr,
         charge=charge,
-        identifiers={
-            "canonical_smiles": canonical_smiles,
-            "smiles": smiles,
-            "canonical_smiles_program": "rdkit",
-        },
+        identifiers=Identifiers(
+            canonical_smiles=canonical_smiles,
+            smiles=smiles,
+            canonical_smiles_program="rdkit",
+        ),
         connectivity=connectivity,
         **struct_kwargs,
     )

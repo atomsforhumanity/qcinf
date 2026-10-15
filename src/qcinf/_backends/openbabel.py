@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 
 import numpy as np
-from qcdata import Structure
+from qcdata import Identifiers, Structure
 from qcref import constants
 from qcref import periodic_table as pt
 from typing_extensions import ParamSpec
@@ -118,11 +118,11 @@ def _smiles_to_structure_ob(
         symbols=atoms,
         geometry=geometry_bohr,
         charge=charge,
-        identifiers={
-            "canonical_smiles": canonical_smiles,
-            "smiles": smiles,
-            "canonical_smiles_program": "openbabel",
-        },
+        identifiers=Identifiers(
+            canonical_smiles=canonical_smiles,
+            smiles=smiles,
+            canonical_smiles_program="openbabel",
+        ),
         connectivity=connectivity,
         **struct_kwargs,
     )

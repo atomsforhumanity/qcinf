@@ -444,12 +444,14 @@ def test_align_fixed_aligns_rotated_and_translated_coordinates() -> None:
 def test_snap_allow_inversions_forces_kabsch_when_qcp_requested() -> None:
     struct = Structure(
         symbols=["C", "N", "O", "F"],
-        geometry=[
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ],
+        geometry=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+        ),
         connectivity=[(0, 1, 1.0), (0, 2, 1.0), (0, 3, 1.0)],
     )
     mirrored = struct.model_copy(
@@ -517,25 +519,29 @@ def test_snap_rmsd_align_assign_handles_peripheral_symmetry_methane() -> None:
     # CH4 has a core atom (C) with four equivalent peripheral leaves (H).
     methane_a = Structure(
         symbols=["C", "H", "H", "H", "H"],
-        geometry=[
-            [0.0, 0.0, 0.0],
-            [1.0, 1.0, 1.0],
-            [-1.0, -1.0, 1.0],
-            [-1.0, 1.0, -1.0],
-            [1.0, -1.0, -1.0],
-        ],
+        geometry=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 1.0, 1.0],
+                [-1.0, -1.0, 1.0],
+                [-1.0, 1.0, -1.0],
+                [1.0, -1.0, -1.0],
+            ]
+        ),
         connectivity=[(0, 1, 1.0), (0, 2, 1.0), (0, 3, 1.0), (0, 4, 1.0)],
     )
     # Same geometry but with hydrogens permuted in index order.
     methane_b = Structure(
         symbols=["C", "H", "H", "H", "H"],
-        geometry=[
-            [0.0, 0.0, 0.0],
-            [-1.0, 1.0, -1.0],
-            [1.0, -1.0, -1.0],
-            [1.0, 1.0, 1.0],
-            [-1.0, -1.0, 1.0],
-        ],
+        geometry=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [-1.0, 1.0, -1.0],
+                [1.0, -1.0, -1.0],
+                [1.0, 1.0, 1.0],
+                [-1.0, -1.0, 1.0],
+            ]
+        ),
         connectivity=[(0, 1, 1.0), (0, 2, 1.0), (0, 3, 1.0), (0, 4, 1.0)],
     )
 
@@ -567,12 +573,12 @@ def test_snap_rmsd_align_assign_invalid_units_raises(water) -> None:
 def test_snap_rmsd_align_assign_non_isomorphic_raises() -> None:
     water = Structure(
         symbols=["O", "H", "H"],
-        geometry=[[0.0, 0.0, 0.0], [1.8, 0.0, 0.0], [0.0, 1.8, 0.0]],
+        geometry=np.array([[0.0, 0.0, 0.0], [1.8, 0.0, 0.0], [0.0, 1.8, 0.0]]),
         connectivity=[(0, 1, 1.0), (0, 2, 1.0)],
     )
     linear = Structure(
         symbols=["O", "H", "H"],
-        geometry=[[0.0, 0.0, 0.0], [1.8, 0.0, 0.0], [3.6, 0.0, 0.0]],
+        geometry=np.array([[0.0, 0.0, 0.0], [1.8, 0.0, 0.0], [3.6, 0.0, 0.0]]),
         connectivity=[(0, 1, 1.0), (1, 2, 1.0)],
     )
 

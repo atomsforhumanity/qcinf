@@ -1,6 +1,8 @@
+import json
+
 import numpy as np
 import pytest
-from qcdata import ConformerSearchResults, Structure
+from qcdata import Structure
 from qcref import constants
 
 from qcinf import align, compute_rmsd, filter_conformers_indices, rmsd
@@ -303,9 +305,11 @@ def test_align_large_molecule():
 # and/or not considering symmetries.
 def test_conformers_filtered(test_data_dir):
     # Catalyst/Na+ conformer search
-    csr = ConformerSearchResults.open(test_data_dir / "conf_search.json")
+    # Saved conformers from a CREST search (the file predates qcdata's provenance field).
+    saved = json.loads((test_data_dir / "conf_search.json").read_text())
+    conformers = [Structure.model_validate(c) for c in saved["conformers"]]
     keep_indices = filter_conformers_indices(
-        csr.conformers, backend="rdkit", threshold=0.47 * constants.ANGSTROM_TO_BOHR
+        conformers, backend="rdkit", threshold=0.47 * constants.ANGSTROM_TO_BOHR
     )
     assert len(keep_indices) == 6
     assert keep_indices == [0, 5, 7, 8, 9, 10]
