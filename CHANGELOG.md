@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.4.2] - 2026-10-14
+
 ### Changed
 
 - Development tooling: shared ruff (including Google docstring rules), mypy (fully typed library code), and pytest settings; pre-commit hooks that run the locked tools through `uv run`; one CI workflow; a tag-driven release workflow with `scripts/prepare_release.py` and an approval-gated PyPI deployment. Added CONTRIBUTING.md and AGENTS.md.
@@ -112,7 +114,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Setup all DevOps workflows and basic package setup.
 - Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcdata` into this repo.
 
-[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.4.1...HEAD
+[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.4.2...HEAD
+[0.4.2]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.2
 [0.4.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.1
 [0.4.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.1
 [0.4.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.0
