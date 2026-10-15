@@ -1,3 +1,5 @@
+"""Private graph helpers (pynauty conversion, canonical maps, branch hashing)."""
+
 import hashlib
 import struct
 from collections import defaultdict
@@ -33,8 +35,7 @@ def _to_pynauty_graph(
     coloring: list[Any] | None = None,
     determine_connectivity_if_missing: bool = True,
 ) -> pn.Graph:
-    """
-    Convert a Structure's and optional coloring list to a pynauty Graph.
+    """Convert a Structure's and optional coloring list to a pynauty Graph.
 
     Parameters:
         struct: The Structure to convert.
@@ -44,6 +45,7 @@ def _to_pynauty_graph(
             default coloring.
         determine_connectivity_if_missing: Whether to infer connectivity using
             covalent radii heuristics when the structure has no connectivity defined.
+
     Returns:
         The corresponding pynauty Graph.
     """
@@ -63,8 +65,7 @@ def _to_pynauty_graph(
 def _to_pynauty_graph_adj_color(
     adj_dict: dict[int, list[int]], coloring: list[Any]
 ) -> pn.Graph:
-    """
-    Convert an adjacency dictionary and coloring list to a pynauty Graph.
+    """Convert an adjacency dictionary and coloring list to a pynauty Graph.
 
     Parameters:
         adj_dict: Adjacency dictionary of the graph, e.g. {0: [1,2], 1: [0,3], ...}.
@@ -72,6 +73,7 @@ def _to_pynauty_graph_adj_color(
         coloring: List of color IDs for each vertex, e.g., [0,0,0,3,3,3]
             indicates vertices 0-2 are of one color and vertices 3-5 are a second color.
             Using the structure's symbols array can be used as a default coloring.
+
     Returns:
         The corresponding pynauty Graph.
     """
@@ -87,7 +89,15 @@ def _canonical_map_pn(
     B: pn.Graph,
 ) -> list[int]:
     """Generate a mapping of vertices from A -> B using canonical labels.
+
     The final mapping M satisfies M[i_A] = i_B.
+
+    Args:
+        A: The source pynauty graph.
+        B: The target pynauty graph; assumed isomorphic to ``A``.
+
+    Returns:
+        The vertex mapping M as a list where ``M[i_A] = i_B``.
 
     Note:
         pynauty's canonical labels map canon -> original index, meaning that
@@ -106,9 +116,9 @@ def _get_branch_info(
     root: int,
     color: list[int],
 ) -> tuple[set[int], bytes]:
-    """
-    Compute (branch_vertices, rooted AHU signature) for the branch hanging off `parent`
-    through neighbor `root`.
+    r"""Compute the vertices and rooted AHU signature of a branch.
+
+    The branch is the one hanging off `parent` through neighbor `root`.
 
     This is intended to be called on the *full remaining graph* adjacency (not just the branch).
     We restrict traversal to the branch component by forbidding traversal into `parent`.
@@ -133,7 +143,7 @@ def _get_branch_info(
     Returns:
         branch_vertices, root_signature
             branch_vertices is the vertex set of the connected component containing `root` in
-        G \\ {parent}. root_signature is a deterministic 16-byte digest.
+        G \ {parent}. root_signature is a deterministic 16-byte digest.
     """
     # Discovery: build parent pointers + DFS order, restricted to the branch component.
     visited: set[int] = set()

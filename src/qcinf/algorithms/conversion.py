@@ -14,7 +14,11 @@ _SMILES_TO_STRUCTURE_BACKENDS: dict[str, Callable[..., Structure]] = {
 
 
 def smiles_to_structure(
-    smiles: str, *, backend: str = "rdkit", force_field: str = "MMFF94", **struct_kwargs
+    smiles: str,
+    *,
+    backend: str = "rdkit",
+    force_field: str = "MMFF94",
+    **struct_kwargs: Any,
 ) -> Structure:
     """Convert a SMILES string to a Structure object.
 
@@ -55,8 +59,7 @@ def structure_to_smiles(
     hydrogens: bool = False,
     options: dict[str, Any] | None = None,
 ) -> str:
-    """
-    Convert a [`qcdata.Structure`][qcdata.Structure] into a canonical SMILES string.
+    """Convert a [`qcdata.Structure`][qcdata.Structure] into a canonical SMILES string.
 
     Args:
         struct: The Structure object to convert.

@@ -4,11 +4,11 @@ import functools
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
-from qcconst import constants
 from qcdata import LengthUnit, Structure
+from qcref import constants
 from typing_extensions import ParamSpec
 
 from .utils import mute_c_stderr
@@ -27,9 +27,14 @@ R = TypeVar("R")
 
 
 def requires_rdkit(func: Callable[P, R]) -> Callable[P, R]:
-    """
-    Decorator that raises a clean error *at call-time* if RDKit
-    isn't installed.
+    """Raise a clean error *at call-time* if RDKit isn't installed.
+
+    Args:
+        func: The function that requires RDKit.
+
+    Returns:
+        A wrapped function that raises ``ModuleNotFoundError`` when called if RDKit
+        could not be imported, and otherwise calls ``func`` unchanged.
     """
 
     @functools.wraps(func)
@@ -60,8 +65,7 @@ def _rmsd_rdkit(
     cov_factor: float = 1.3,
     length_unit: LengthUnit = LengthUnit.BOHR,
 ) -> float:
-    """
-    Calculate the root mean square deviation between two structures in Bohr or Angstrom.
+    """Calculate the root mean square deviation between two structures in Bohr or Angstrom.
 
     May lead to a 'combinatorial explosion' if symmetry=True and many molecule symmetries
     (e.g., many hydrogens) are present. If this function is taking a long time to
@@ -120,7 +124,7 @@ def _rmsd_rdkit(
             try:  # Swap the order of the molecules and try again.
                 rmsd = rdMolAlign.GetBestRMS(mol1, mol2, numThreads=numthreads)
             except RuntimeError:  # If it fails again, raise the original error
-                raise e
+                raise e from None
 
     else:  # Do not take symmetry into account. Structs aligned by atom index.
         rmsd = rdMolAlign.AlignMol(mol2, mol1)
@@ -138,9 +142,10 @@ def _align_rdkit(
     cov_factor: float = 1.3,
     length_unit: LengthUnit = LengthUnit.BOHR,
 ) -> tuple[Structure, float]:
-    """
-    Return a new structure that is optimally aligned to the reference structure and
-    the RMSD between the two structures in Bohr or Angstroms.
+    """Align a structure to a reference structure and compute their RMSD.
+
+    Returns a new structure that is optimally aligned to the reference structure
+    and the RMSD between the two structures in Bohr or Angstroms.
 
     May lead to a 'combinatorial explosion' especially if many molecule symmetries
     (e.g., many hydrogens) are present.If this function is taking a long time to
@@ -164,7 +169,8 @@ def _align_rdkit(
             "bohr". If "angstrom", the RMSD will be in Angstroms.
 
     Returns:
-        Tuple of the aligned structure and the RMSD in Angstroms.
+        Tuple of the aligned structure and the RMSD, in Bohr by default or in
+        Angstroms if ``length_unit`` is ``LengthUnit.ANGSTROM``.
     """
     # Create RDKit molecules
     mol = _structure_to_rdkit_mol(struct)
@@ -244,7 +250,7 @@ def _align_rdkit(
 
 @requires_rdkit
 def _smiles_to_structure_rdkit(
-    smiles: str, force_field: str = "MMFF94s", **struct_kwargs
+    smiles: str, force_field: str = "MMFF94s", **struct_kwargs: Any
 ) -> Structure:
     """Convert a SMILES string to a Structure object.
 
@@ -426,8 +432,7 @@ def _determine_bonds_rdkit(
     cov_factor: float = 1.3,
     allow_charged_fragments: bool = False,
 ) -> "Mol":
-    """
-    Determine the bonds in an RDKit molecule, using robust fallback parameters.
+    """Determine the bonds in an RDKit molecule, using robust fallback parameters.
 
     Hueckel method is most robust; may useVdw=True use VdW radii; default method
     is connect-the-dots (fastest but least robust)
@@ -512,7 +517,7 @@ def _determine_bonds_rdkit(
                                             allowChargedFragments=False,
                                         )
                                     except Exception:
-                                        raise e
+                                        raise e from None
             else:
                 rdDetermineBonds.DetermineBonds(
                     mol,

@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
-from qcconst import constants
-from qcconst.constants import ANGSTROM_TO_BOHR
 from qcdata import ConformerSearchResults, Structure
+from qcref import constants
 
 from qcinf import align, compute_rmsd, filter_conformers_indices, rmsd
 
@@ -53,7 +52,7 @@ def test_rmsd_rotated_structures_rdkit():
                 [-0.2396, 0.9270, 0.0],
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )  # Water molecule in Bohr
 
     # Rotate struct2 by 180 degrees around the z-axis
@@ -99,7 +98,7 @@ def test_align_identical_structures():
                 [-0.3126, -0.4446, 0.7697],
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )  # Ammonia molecule
 
     struct = Structure(symbols=symbols, geometry=geometry)
@@ -123,7 +122,7 @@ def test_align_rotated_structure():
                 [-0.2396, 0.9270, 0.0],
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )
 
     # Rotate struct by 90 degrees around the y-axis
@@ -160,7 +159,7 @@ def test_align_with_atom_reordering_rdkit():
                 [-0.5133, 0.8892, -0.3633],  # Chlorine
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )
 
     symbols2 = ["C", "Cl", "H", "H", "H"]
@@ -208,7 +207,7 @@ def test_align_raises_value_error_reorder_different_atom_count_if_symmetry():
                 [0.63, -0.63, -0.63],
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )
 
     symbols2 = ["C", "H", "H", "H"]
@@ -221,7 +220,7 @@ def test_align_raises_value_error_reorder_different_atom_count_if_symmetry():
                 [-0.63, 0.63, -0.63],
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )
 
     struct1 = Structure(symbols=symbols1, geometry=geometry1)
@@ -241,7 +240,7 @@ def test_rmsd_with_numthreads_rdkit():
                 [-0.7586, 0.0, 0.5043],
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )  # Water molecule
 
     struct1 = Structure(symbols=symbols, geometry=geometry)
@@ -276,7 +275,7 @@ def test_align_incorrect_atom_mapping():
                 [0.63, -0.63, -0.63],  # Hydrogen
             ]
         )
-        * ANGSTROM_TO_BOHR
+        * constants.ANGSTROM_TO_BOHR
     )
 
     struct1 = Structure(symbols=symbols1, geometry=geometry)
@@ -289,7 +288,7 @@ def test_align_incorrect_atom_mapping():
 def test_align_large_molecule():
     """Test aligning larger molecules."""
     symbols = ["C"] * 10
-    geometry = np.random.rand(10, 3) * ANGSTROM_TO_BOHR
+    geometry = np.random.rand(10, 3) * constants.ANGSTROM_TO_BOHR
 
     struct1 = Structure(symbols=symbols, geometry=geometry)
     struct2 = Structure(symbols=symbols, geometry=geometry + 0.1)  # Slightly shifted

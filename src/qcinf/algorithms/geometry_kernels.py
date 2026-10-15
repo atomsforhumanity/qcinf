@@ -1,3 +1,5 @@
+"""Low-level coordinate kernels: Kabsch/QCP alignment, RMSD, and rotations."""
+
 import warnings
 
 import numpy as np
@@ -11,8 +13,7 @@ from .kernels._qcp_numba_kernel import _qcp_rotation_rmsd_numba
 def kabsch(
     P: np.ndarray, Q: np.ndarray, allow_inversions: bool = False
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Compute the optimal rotation matrix that aligns P onto Q using the Kabsch algorithm.
+    """Compute the optimal rotation matrix that aligns P onto Q using the Kabsch algorithm.
 
     To rotate P onto Q, use: P_rotated = (P - centroid_P) @ R.T + cQ
 
@@ -57,15 +58,17 @@ def kabsch(
 def qcp_rotation_and_rmsd(
     P: np.ndarray, Q: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    """
-    Compute optimal rotation (3x3 matrix), centroids, and RMSD between P and Q
-    using the direct QCP method (Theobald + Liu) with numba acceleration.
+    """Compute the optimal rotation, centroids, and RMSD between P and Q via QCP.
+
+    Uses the direct QCP method (Theobald + Liu) with numba acceleration, falling
+    back to Kabsch (with a ``RuntimeWarning``) if numba is unavailable.
 
     To rotate P onto Q, use: P_rotated = (P - centroid_P) @ R.T + cQ
 
     Parameters:
         P: An N x 3 array of coordinates.
         Q: An N x 3 array of coordinates.
+
     Returns:
         R: The optimal 3x3 rotation matrix.
         cP: The centroid of P.
@@ -83,7 +86,7 @@ def qcp_rotation_and_rmsd(
         return _qcp_rotation_rmsd_numba(P, Q)
     except (
         NumbaUnavailableError
-    ) as e:  # Gracefully fall back to Kabsch if numba is unavailable
+    ):  # Gracefully fall back to Kabsch if numba is unavailable
         # Fallback path: Kabsch alignment + RMSD
         warnings.warn(
             "The numba-accelerated QCP kernel is unavailable because numba "
@@ -103,8 +106,7 @@ def qcp_rotation_and_rmsd(
 def qcp_rotation(
     P: np.ndarray, Q: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    QCP-based optimal rotation and centroids.
+    """QCP-based optimal rotation and centroids.
 
     Thin convenience wrapper around :func:`qcp_rotation_and_rmsd` that returns
     only (R, cP, cQ) and discards the RMSD.
@@ -114,8 +116,7 @@ def qcp_rotation(
 
 
 def qcp_rmsd(A: np.ndarray, B: np.ndarray) -> float:
-    """
-    QCP-based minimal RMSD.
+    """QCP-based minimal RMSD.
 
     Thin convenience wrapper around :func:`qcp_rotation_and_rmsd` that returns
     only the RMSD.
@@ -132,8 +133,7 @@ def _compute_rmsd(
     allow_inversions: bool = False,
     backend: str = "kabsch",
 ) -> float:
-    """
-    Compute the RMSD between two sets of coordinates, optionally with alignment.
+    """Compute the RMSD between two sets of coordinates, optionally with alignment.
 
     Args:
         coords1: An N x 3 array of coordinates.
@@ -171,8 +171,7 @@ def _compute_rmsd(
 
 
 def rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
-    """
-    Create a 3x3 rotation matrix for a rotation about a given axis by angle in degrees.
+    """Create a 3x3 rotation matrix for a rotation about a given axis by angle in degrees.
 
     Parameters:
         axis (str): 'x', 'y', or 'z' specifying the rotation axis.
@@ -201,8 +200,7 @@ def rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
 
 
 def rotate_structure(struct: Structure, axis: str, angle_deg: float) -> Structure:
-    """
-    Return a new Structure with its coordinates rotated by angle_deg about the given axis.
+    """Return a new Structure with its coordinates rotated by angle_deg about the given axis.
 
     Parameters:
         struct (Structure): Input structure with a .geometry attribute (an N x 3 numpy array).

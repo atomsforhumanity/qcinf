@@ -5,7 +5,9 @@ from qcdata import Structure
 from qcinf.algorithms import snap
 
 
-def _component_sets(components: list[snap.Component]) -> set[tuple[int | None, bool, tuple[int, ...]]]:
+def _component_sets(
+    components: list[snap.Component],
+) -> set[tuple[int | None, bool, tuple[int, ...]]]:
     """Normalize Component objects for order-independent assertions."""
     return {
         (
@@ -44,9 +46,7 @@ def test_rx_graph_from_adj_preserves_original_vertex_ids_in_payload() -> None:
     assert payload_ids == {10, 20, 30}
 
     # edge_list returns rustworkx indices; translate back using payloads.
-    translated_edges = {
-        tuple(sorted((g[u], g[v]))) for u, v in g.edge_list()
-    }
+    translated_edges = {tuple(sorted((g[u], g[v]))) for u, v in g.edge_list()}
     assert translated_edges == {(10, 20), (20, 30)}
 
 
@@ -129,7 +129,9 @@ def test_determine_core_and_factor_cycles_factors_when_parent_in_core() -> None:
     cycles = [{0, 1, 2}]
     remaining = [{3, 4, 5, 6}]  # larger than cycle, so cycle not absorbed in pass 1a
 
-    core_idxs, components = snap._determine_core_and_factor_cycles(adj, cycles, remaining)
+    core_idxs, components = snap._determine_core_and_factor_cycles(
+        adj, cycles, remaining
+    )
     assert core_idxs == {3, 4, 5, 6}
     assert _component_sets(components) == {(3, False, (0, 1, 2))}
 
@@ -147,7 +149,9 @@ def test_determine_core_and_factor_cycles_ring_to_ring_absorbs_to_core() -> None
     cycles = [{0, 1, 2}, {10, 11, 12}]
     remaining: list[set[int]] = []
 
-    core_idxs, components = snap._determine_core_and_factor_cycles(adj, cycles, remaining)
+    core_idxs, components = snap._determine_core_and_factor_cycles(
+        adj, cycles, remaining
+    )
     assert core_idxs == {0, 1, 2, 10, 11, 12}
     assert components == []
 
@@ -187,7 +191,9 @@ def test_peel_symmetric_leaves_groups_only_duplicated_colors() -> None:
     assert _component_sets(components) == {(0, True, (1, 2))}
 
 
-def test_peel_symmetric_branches_factors_duplicates_when_parent_retains_degree() -> None:
+def test_peel_symmetric_branches_factors_duplicates_when_parent_retains_degree() -> (
+    None
+):
     # Parent 0 has two identical 2-node branches: 0-1-2 and 0-3-4.
     # Leaves 5 and 7 stay, so remaining degree after peel is 2 (allowed).
     adj = {
@@ -370,7 +376,11 @@ def test_iter_component_perms_for_leaf_component_groups_by_orbit() -> None:
     orbit_ids[11] = 7
     orbit_ids[12] = 9
 
-    perms = list(snap._iter_component_perms(adj={0: [10, 11, 12]}, orbit_ids=orbit_ids, component=component))
+    perms = list(
+        snap._iter_component_perms(
+            adj={0: [10, 11, 12]}, orbit_ids=orbit_ids, component=component
+        )
+    )
     assert {tuple(p) for p in perms} == {(0, 1, 2), (1, 0, 2)}
 
 
@@ -383,7 +393,9 @@ def test_iter_component_perms_for_non_leaf_uses_automorphism_group() -> None:
     component = snap.Component(parent_idx=None, leaves=False, idxs=np.array([0, 1, 2]))
     orbit_ids = [1, 2, 1]
 
-    perms = list(snap._iter_component_perms(adj=adj, orbit_ids=orbit_ids, component=component))
+    perms = list(
+        snap._iter_component_perms(adj=adj, orbit_ids=orbit_ids, component=component)
+    )
     assert {tuple(p) for p in perms} == {(0, 1, 2), (2, 1, 0)}
 
 
@@ -544,9 +556,7 @@ def test_snap_rmsd_align_assign_handles_peripheral_symmetry_methane() -> None:
     # Carbon must map to carbon; hydrogens map bijectively among hydrogen indices.
     assert p_opt[0] == 0
     assert set(p_opt[1:]) == {1, 2, 3, 4}
-    np.testing.assert_allclose(
-        aligned.geometry, methane_b.geometry[p_opt], atol=1e-6
-    )
+    np.testing.assert_allclose(aligned.geometry, methane_b.geometry[p_opt], atol=1e-6)
 
 
 def test_snap_rmsd_align_assign_invalid_units_raises(water) -> None:

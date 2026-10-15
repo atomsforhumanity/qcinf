@@ -1,9 +1,11 @@
+"""Connectivity, adjacency, and graph-canonicalization algorithms for Structures."""
+
 from collections import defaultdict
 
 import numpy as np
 import pynauty as pn
-import qcconst.periodic_table as pt
 from qcdata import Structure
+from qcref import periodic_table as pt
 
 from .connectivity_helpers import _canonical_map_pn, _to_pynauty_graph_adj_color
 
@@ -52,7 +54,9 @@ def compute_connectivity(
     bonded_j = j_idx[mask]
 
     # Build connectivity list with bond order 1.0
-    connectivity = [(int(i), int(j), 1.0) for i, j in zip(bonded_i, bonded_j)]
+    connectivity = [
+        (int(i), int(j), 1.0) for i, j in zip(bonded_i, bonded_j, strict=True)
+    ]
     return connectivity
 
 
@@ -159,6 +163,7 @@ def canonical_map(
     Args:
         struct_a: The first Structure.
         struct_b: The second Structure.
+
     Returns:
         A list of indices mapping atoms in struct_a to struct_b.
     """
