@@ -257,13 +257,13 @@ else:
             lam3 = lam2 * lam
             lam4 = lam2 * lam2
 
-            P = lam4 + C2 * lam2 + C1 * lam + C0
-            dP = 4.0 * lam3 + 2.0 * C2 * lam + C1
+            poly = lam4 + C2 * lam2 + C1 * lam + C0
+            dpoly = 4.0 * lam3 + 2.0 * C2 * lam + C1
 
-            if abs(dP) < 1e-18:
+            if abs(dpoly) < 1e-18:
                 break
 
-            lam_new = lam - P / dP
+            lam_new = lam - poly / dpoly
 
             # Clamp to physically meaningful range
             if lam_new < 0.0:
