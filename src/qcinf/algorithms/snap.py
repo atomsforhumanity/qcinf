@@ -1,5 +1,4 @@
-"""
-Symmetry-aware RMSD and assignment for isomorphic molecular graphs.
+"""Symmetry-aware RMSD and assignment for isomorphic molecular graphs.
 
 This module factors a molecule into a core plus peripheral components (leaves, cyclic
 components, and repeated branches), then computes a connectivity-preserving atom mapping
@@ -18,15 +17,16 @@ Public convenience wrappers:
 import copy
 import itertools as it
 from collections import Counter, defaultdict, deque
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable, cast
+from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
 import pynauty as pn
 import rustworkx as rx
-from qcconst import constants
 from qcdata import LengthUnit, Structure
+from qcref import constants
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.permutations import Permutation
 
@@ -86,14 +86,21 @@ def _prune_graph(adj: dict[int, set[int]], keep: set[int]) -> None:
 
 
 def _rx_graph_from_adj(adj: dict[int, set[int]]) -> rx.PyGraph:
-    """
-    Build an undirected rustworkx PyGraph where:
+    """Build an undirected rustworkx PyGraph from an adjacency dict.
+
+    The resulting graph has the following properties:
 
     - Node payload == original vertex id
     - Node index == rustworkx internal index (opaque)
     - Edges are added once (undirected)
 
     You retrieve original ids later via g[node_index].
+
+    Args:
+        adj: Adjacency dict mapping each vertex id to its set of neighbor ids.
+
+    Returns:
+        The undirected rustworkx graph.
     """
     g = rx.PyGraph(multigraph=False)
     adj2rx = {v: g.add_node(v) for v in adj}  # original id -> rx node index
@@ -108,8 +115,7 @@ def _rx_graph_from_adj(adj: dict[int, set[int]]) -> rx.PyGraph:
 
 
 def _cycles(adj: dict[int, set[int]]) -> list[set[int]]:
-    """
-    Return cycle as sets of vertex ids (keys of adj).
+    """Return cycle as sets of vertex ids (keys of adj).
 
     A "cycle" is a connected component of the subgraph consisting only of
     non-bridge edges (edges that lie on at least one cycle).
@@ -119,8 +125,9 @@ def _cycles(adj: dict[int, set[int]]) -> list[set[int]]:
         return (u, v) if u < v else (v, u)
 
     def _has_cycle(g_cycle: rx.PyGraph, comp: set[int]) -> bool:
-        """
-        Determine if the component has at least one cycle. Required due to rustworkx bug.
+        """Determine if the component has at least one cycle.
+
+        Required due to rustworkx bug:
         https://github.com/Qiskit/rustworkx/issues/1534
         """
         n = len(comp)
@@ -160,9 +167,7 @@ def _cycles(adj: dict[int, set[int]]) -> list[set[int]]:
 
 
 def _outside_components(adj: dict[int, set[int]], excluded: set[int]) -> list[set[int]]:
-    """
-    Connected components of the induced subgraph on outside vertices (V \\ excluded).
-    """
+    r"""Connected components of the induced subgraph on outside vertices (V \ excluded)."""
     _adj = copy.deepcopy(adj)
     keep = set(adj) - excluded
     _prune_graph(_adj, keep)
@@ -180,8 +185,7 @@ def _absorb_components(
     cycles: list[set[int]],
     outside_components: list[set[int]],
 ) -> tuple[list[set[int]], list[set[int]]]:
-    """
-    Absorb outside connected-components into cycles when they "single-touch" exactly one cycle.
+    """Absorb outside connected-components into cycles when they "single-touch" exactly one cycle.
 
     Definition:
       - An outside component C "touches" a cycle blob S if there exists an edge (u, v)
@@ -236,9 +240,9 @@ def _determine_core_and_factor_cycles(
     cycles: list[set[int]],
     remaining: list[set[int]],
 ) -> tuple[set[int], list[Component]]:
-    """
-    Determine a core vertex-set and factor peripheral ring systems ("cycle blobs")
-    into Components.
+    r"""Determine a core vertex-set and factor peripheral ring systems into Components.
+
+    Peripheral ring systems are referred to as "cycle blobs" below.
 
     Definitions
     ----------
@@ -247,11 +251,11 @@ def _determine_core_and_factor_cycles(
               These blobs are assumed to already include any absorbed *non-cyclic* substituents
               you want treated as part of the ring substituent layer (i.e., "cycle + its substituents").
     - remaining: connected components of:
-          V \\ union(cycles)
+          V \ union(cycles)
       i.e., ALL vertices not belonging to any cycle blob, partitioned into CCs.
 
     - Outside-neighbor (boundary) of a blob S:
-        ∂(S) = { v in V\\S : exists u in S with (u,v) in E }.
+        ∂(S) = { v in V\S : exists u in S with (u,v) in E }.
 
     Goal / heuristic
     ----------------
@@ -286,7 +290,7 @@ def _determine_core_and_factor_cycles(
 
       Factored blobs are merged by shared parent_idx to handle multiple rings off the same parent.
 
-    Returns
+    Returns:
     -------
     core_idxs: set[int]
         All vertex ids considered core after absorption decisions.
@@ -331,7 +335,7 @@ def _determine_core_and_factor_cycles(
                     core_idxs |= largest
 
     # Pass 1b: absorb all cycles with |∂| != 1
-    for cyc, b in zip(cycles, boundaries):
+    for cyc, b in zip(cycles, boundaries, strict=True):
         if len(b) != 1:
             core_idxs |= cyc
 
@@ -341,7 +345,7 @@ def _determine_core_and_factor_cycles(
     # ---- Pass 2: factor peripheral (pendant) cycles whose unique outside contact is in core ----
     parent2idxs: defaultdict[int, set[int]] = defaultdict(set)
 
-    for cyc, b in zip(cycles, boundaries):
+    for cyc, b in zip(cycles, boundaries, strict=True):
         if len(b) != 1:
             continue  # already absorbed in pass 1b (or will be in core anyway)
         if cyc <= core_anchor:
@@ -371,8 +375,7 @@ def _determine_core_and_factor_cycles(
 def _peel_cycles(
     adj: dict[int, set[int]],
 ) -> tuple[set[int], list[Component]]:
-    """
-    Peel cyclic peripheral components from the graph.
+    """Peel cyclic peripheral components from the graph.
 
     Returns:
       core_idxs, list[Components] (cycles with their substituents)
@@ -448,8 +451,7 @@ def _peel_symmetric_leaves(
 def _peel_symmetric_branches(
     adj: dict[int, set[int]], *, color: list[int]
 ) -> tuple[set[int], list[Component]]:
-    """
-    Peel repeated rooted isomorphic substituent branches off high-degree (>=4) vertices.
+    """Peel repeated rooted isomorphic substituent branches off high-degree (>=4) vertices.
 
     Assumptions:
       - This is called on the "remaining" graph after cycle-related factoring has happened.
@@ -588,8 +590,7 @@ def _validate_factoring(batches: list[Batch]) -> None:
 def _induced_local_adj(
     adj: dict[int, list[int]], nodes: npt.NDArray[np.int64]
 ) -> tuple[dict[int, list[int]], dict[int, int]]:
-    """
-    Construct the induced subgraph on `nodes` with a local 0..k-1 labeling.
+    """Construct the induced subgraph on `nodes` with a local 0..k-1 labeling.
 
     Important ordering contract:
         The local vertex indices are assigned *in the order of `nodes`*.
@@ -830,8 +831,7 @@ def snap_rmsd_align_assign(
     units: str | LengthUnit = "bohr",
     cov_factor: float = 1.2,
 ) -> tuple[float, Structure, list[int]]:
-    """
-    Compute snapRMSD(a_struct -> b_struct). Returns (rmsd, a_aligned, p_opt).
+    """Compute snapRMSD(a_struct -> b_struct). Returns (rmsd, a_aligned, p_opt).
 
     If connectivity for the structures is not already present, it will be computed using covalent radii heuristics.
     The structures must have the same connectivity to be compared.
@@ -917,10 +917,10 @@ def snap_rmsd_align_assign(
 
     try:
         units = LengthUnit(units)
-    except ValueError:
+    except ValueError as e:
         raise ValueError(
             f"Invalid units '{units}'. Valid options are 'bohr' or 'angstrom'."
-        )
+        ) from e
     effective_alignment_backend = "kabsch" if allow_inversions else alignment_backend
     # --- Graphs & isomorphism check
     a_conn = (
@@ -1015,11 +1015,23 @@ def snap_rmsd_align_assign(
 
             # Per component and/or first component alignment (establishes frame)
             if align and (align_per_component or (b_idx == 0 and c_idx == 0)):
-                a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=effective_alignment_backend, allow_inversions=allow_inversions)
+                a_geom = _align_fixed(
+                    a_geom,
+                    b_geom,
+                    p_opt,
+                    alignment_backend=effective_alignment_backend,
+                    allow_inversions=allow_inversions,
+                )
 
         # Realign after each batch; avoid duplicate alignments
         if align and not align_per_component and not (b_idx == 0 and c_idx == 0):
-            a_geom = _align_fixed(a_geom, b_geom, p_opt, alignment_backend=effective_alignment_backend, allow_inversions=allow_inversions)
+            a_geom = _align_fixed(
+                a_geom,
+                b_geom,
+                p_opt,
+                alignment_backend=effective_alignment_backend,
+                allow_inversions=allow_inversions,
+            )
 
     assert np.all(p_opt != -1), "Not all indices got fixed!."  # Sanity check while debugging # fmt: skip
     assert all(v == 1 for v in Counter(p_opt).values()), "p_opt is not a valid permutation!"  # Sanity check while debugging # fmt: skip
@@ -1033,7 +1045,7 @@ def snap_rmsd_align_assign(
     return final_rmsd, a_aligned, [int(x) for x in p_opt]
 
 
-def snap_rmsd(a_struct: Structure, b_struct: Structure, **kwargs) -> float:
+def snap_rmsd(a_struct: Structure, b_struct: Structure, **kwargs: Any) -> float:
     """Thin convenience wrapper around :func:`snap_rmsd_align_assign` to return only RMSD."""
     rmsd_val, _, _ = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
     return rmsd_val
@@ -1042,7 +1054,7 @@ def snap_rmsd(a_struct: Structure, b_struct: Structure, **kwargs) -> float:
 def snap_align(
     a_struct: Structure,
     b_struct: Structure,
-    **kwargs,
+    **kwargs: Any,
 ) -> Structure:
     """Thin convenience wrapper around :func:`snap_rmsd_align_assign` to return only aligned structure."""  # fmt: skip
     _, a_aligned, _ = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
@@ -1052,7 +1064,7 @@ def snap_align(
 def snap_align_rmsd(
     a_struct: Structure,
     b_struct: Structure,
-    **kwargs,
+    **kwargs: Any,
 ) -> tuple[Structure, float]:
     """Thin convenience wrapper around :func:`snap_rmsd_align_assign` to return RMSD and aligned structure."""  # fmt: skip
     rmsd, a_aligned, _ = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)
@@ -1062,7 +1074,7 @@ def snap_align_rmsd(
 def snap_assign(
     a_struct: Structure,
     b_struct: Structure,
-    **kwargs,
+    **kwargs: Any,
 ) -> list[int]:
     """Thin convenience wrapper around :func:`snap_rmsd_align_assign` to return only assignment."""
     _, _, p_opt = snap_rmsd_align_assign(a_struct, b_struct, **kwargs)

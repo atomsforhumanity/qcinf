@@ -2,6 +2,7 @@
 
 import warnings as _warnings
 from collections.abc import Callable
+from typing import Any
 
 from qcdata import Structure
 
@@ -21,7 +22,7 @@ def compute_rmsd(
     struct2: Structure,
     *,
     backend: str = "qcinf",
-    **kwargs,
+    **kwargs: Any,
 ) -> float:
     """Calculate the root mean square deviation (RMSD) between two structures.
 
@@ -63,7 +64,7 @@ def rmsd(
     struct2: Structure,
     *,
     backend: str = "qcinf",
-    **kwargs,
+    **kwargs: Any,
 ) -> float:
     """Deprecated alias for :func:`compute_rmsd`."""
     _warnings.warn(
@@ -87,7 +88,7 @@ def align(
     *,
     backend: str = "rdkit",
     symmetry: bool = False,
-    **kwargs,
+    **kwargs: Any,
 ) -> tuple[Structure, float]:
     """Align a structure to a reference structure.
 
@@ -114,7 +115,7 @@ def filter_conformers_indices(
     conformers: list[Structure],
     threshold: float = 1.0,
     backend: str = "rdkit",
-    **rmsd_kwargs,
+    **rmsd_kwargs: Any,
 ) -> list[int]:
     """Filter conformers based on RMSD threshold.
 
@@ -153,7 +154,7 @@ def filter_conformers(
     conformers: list[Structure],
     threshold: float = 1.0,
     backend: str = "rdkit",
-    **rmsd_kwargs,
+    **rmsd_kwargs: Any,
 ) -> list[Structure]:
     """Filter conformers based on RMSD threshold.
 

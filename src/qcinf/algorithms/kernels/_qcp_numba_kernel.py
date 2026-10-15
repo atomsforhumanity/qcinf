@@ -1,5 +1,4 @@
 import math
-from typing import Tuple
 
 import numpy as np
 
@@ -10,11 +9,23 @@ try:
 except Exception as exc:
     _NUMBA_IMPORT_ERROR = exc
 
-    def _qcp_rotation_rmsd_numba(*args, **kwargs):
-        """
-        Placeholder stub used when numba is not available.
+    def _qcp_rotation_rmsd_numba(
+        P: np.ndarray, Q: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+        """Placeholder stub used when numba is not available.
 
         Called if the fast QCP kernel is requested but numba cannot be imported.
+        Mirrors the signature of the numba kernel so callers type-check alike.
+
+        Args:
+            P: Unused; N x 3 coordinates of the structure to rotate.
+            Q: Unused; N x 3 coordinates of the reference structure.
+
+        Returns:
+            Never returns.
+
+        Raises:
+            NumbaUnavailableError: Always, chained from the original import error.
         """
         raise NumbaUnavailableError(
             "The numba-accelerated QCP kernel is unavailable because numba "
@@ -28,9 +39,7 @@ else:
 
     @njit(cache=True)
     def _det3x3(M: np.ndarray) -> float:
-        """
-        Determinant of a 3x3 matrix M.
-        """
+        """Determinant of a 3x3 matrix M."""
         return (
             M[0, 0] * (M[1, 1] * M[2, 2] - M[1, 2] * M[2, 1])
             - M[0, 1] * (M[1, 0] * M[2, 2] - M[1, 2] * M[2, 0])
@@ -39,9 +48,7 @@ else:
 
     @njit(cache=True)
     def _det4x4(K: np.ndarray) -> float:
-        """
-        Determinant of a 4x4 matrix K via expansion along the first row.
-        """
+        """Determinant of a 4x4 matrix K via expansion along the first row."""
         det = 0.0
         for j in range(4):
             # Build 3x3 minor excluding row 0 and column j
@@ -61,8 +68,8 @@ else:
 
     @njit(cache=True)
     def _adjoint4x4(A: np.ndarray) -> np.ndarray:
-        """
-        Compute adj(A) for a 4x4 matrix A via cofactors.
+        """Compute adj(A) for a 4x4 matrix A via cofactors.
+
         adj(A) = C^T, where C_ij = (-1)^(i+j) * det(minor_ij).
         """
         adj = np.empty((4, 4), dtype=np.float64)
@@ -91,8 +98,7 @@ else:
 
     @njit(cache=True)
     def _quat_to_rot(q: np.ndarray) -> np.ndarray:
-        """
-        Convert unit quaternion q = [q0, qx, qy, qz] to a 3x3 rotation matrix.
+        """Convert unit quaternion q = [q0, qx, qy, qz] to a 3x3 rotation matrix.
 
         This version returns the transpose of the canonical column-vector
         rotation matrix used before, so that in the public API you can always apply:
@@ -131,9 +137,8 @@ else:
     @njit(cache=True)
     def _qcp_rotation_rmsd_numba(
         P: np.ndarray, Q: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-        """
-        Numba-optimized QCP kernel: returns optimal rotation matrix and RMSD.
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+        """Numba-optimized QCP kernel: returns optimal rotation matrix and RMSD.
 
         Implements:
         - Theobald's quartic / Newton–Raphson to get λ_max
@@ -252,13 +257,13 @@ else:
             lam3 = lam2 * lam
             lam4 = lam2 * lam2
 
-            P = lam4 + C2 * lam2 + C1 * lam + C0
-            dP = 4.0 * lam3 + 2.0 * C2 * lam + C1
+            poly = lam4 + C2 * lam2 + C1 * lam + C0
+            dpoly = 4.0 * lam3 + 2.0 * C2 * lam + C1
 
-            if abs(dP) < 1e-18:
+            if abs(dpoly) < 1e-18:
                 break
 
-            lam_new = lam - P / dP
+            lam_new = lam - poly / dpoly
 
             # Clamp to physically meaningful range
             if lam_new < 0.0:

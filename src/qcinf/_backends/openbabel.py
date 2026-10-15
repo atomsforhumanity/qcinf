@@ -2,12 +2,12 @@
 
 import functools
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
-import qcconst.periodic_table as pt
-from qcconst import constants
-from qcdata import Structure
+from qcdata import Identifiers, Structure
+from qcref import constants
+from qcref import periodic_table as pt
 from typing_extensions import ParamSpec
 
 try:
@@ -23,9 +23,14 @@ R = TypeVar("R")
 
 
 def requires_openbabel(func: Callable[P, R]) -> Callable[P, R]:
-    """
-    Decorator that raises a clean error *at call-time* if Open Babel
-    isn't installed.
+    """Raise a clean error *at call-time* if Open Babel isn't installed.
+
+    Args:
+        func: The function that requires Open Babel.
+
+    Returns:
+        A wrapped function that raises ``ModuleNotFoundError`` when called if Open
+        Babel could not be imported, and otherwise calls ``func`` unchanged.
     """
 
     @functools.wraps(func)
@@ -47,7 +52,7 @@ def requires_openbabel(func: Callable[P, R]) -> Callable[P, R]:
 
 @requires_openbabel
 def _smiles_to_structure_ob(
-    smiles: str, force_field: str = "mmff94", **struct_kwargs
+    smiles: str, force_field: str = "mmff94", **struct_kwargs: Any
 ) -> Structure:
     """Convert a SMILES string to a Structure object.
 
@@ -113,11 +118,11 @@ def _smiles_to_structure_ob(
         symbols=atoms,
         geometry=geometry_bohr,
         charge=charge,
-        identifiers={
-            "canonical_smiles": canonical_smiles,
-            "smiles": smiles,
-            "canonical_smiles_program": "openbabel",
-        },
+        identifiers=Identifiers(
+            canonical_smiles=canonical_smiles,
+            smiles=smiles,
+            canonical_smiles_program="openbabel",
+        ),
         connectivity=connectivity,
         **struct_kwargs,
     )
@@ -153,7 +158,7 @@ def _structure_to_smiles_ob(struct: Structure, *, hydrogens: bool = False) -> st
 
     # Set the formal charges on the atoms
     if sum(partial_charges) != 0:
-        for atom, charge in zip(mol.atoms, partial_charges):
+        for atom, charge in zip(mol.atoms, partial_charges, strict=False):
             atom.OBAtom.SetFormalCharge(int(round(charge)))
 
     # Ensure the total charge matches the structure

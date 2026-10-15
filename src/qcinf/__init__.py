@@ -1,3 +1,9 @@
+"""Cheminformatics algorithms for qcdata structures.
+
+Provides RMSD, alignment, connectivity, and SMILES conversion utilities built on
+RDKit, OpenBabel, and native kernels.
+"""
+
 from importlib import metadata as _metadata
 
 try:
