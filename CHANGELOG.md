@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.5.0] - 2026-10-21
+
 ### Changed
 
 - 🚨 Requires Python 3.11 or newer. Python 3.10 reached end of life in October 2026.
@@ -118,7 +120,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Setup all DevOps workflows and basic package setup.
 - Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcdata` into this repo.
 
-[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.4.2...HEAD
+[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.5.0
 [0.4.2]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.2
 [0.4.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.1
 [0.4.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.1
