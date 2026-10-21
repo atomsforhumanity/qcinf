@@ -1,6 +1,6 @@
 [project]
 name = "qcinf"
-version = "0.5.0"
+version = "0.5.1"
 description = "Cheminformatics algorithms and structure utilities using standardized qcdata data structures."
 readme = "README.md"
 authors = [{ name = "Colton Hicks", email = "github@coltonhicks.com" }]
