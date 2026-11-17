@@ -1,7 +1,7 @@
 [project]
 name = "qcinf"
 version = "0.6.0a1"
-description = "Cheminformatics algorithms and structure utilities using standardized qcdata data structures."
+description = "Cheminformatics algorithms, structure utilities and Molden files for qcdata structures."
 readme = "README.md"
 authors = [{ name = "Colton Hicks", email = "github@coltonhicks.com" }]
 requires-python = ">=3.11"
@@ -21,7 +21,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
