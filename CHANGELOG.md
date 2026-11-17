@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.6.0a1] - 2026-11-17
+
 ### Added
 
 - `qcinf.molden`: `write(wavefunction, structure)` turns a qcdata `Wavefunction` with orbital coefficients into the text of a Molden file, and `read(text)` returns a `Structure` and `Wavefunction`. Files are in atomic units and qcdata's `MOLDEN_CONVENTION` (through `Wavefunction.with_convention`); spherical shells are written as `[5D]`/`[7F]`/`[9G]`, or as Cartesian functions with `cartesian=True`. Restricted closed shells are one set (occupations 0 to 2), restricted open shells and unrestricted orbitals alpha and beta sets (0 to 1). Files with the contraction coefficients of bare primitives (xtb, tblite, the g-xTB program) read with `normalized_primitives=False`, and other component normalizations with `ao_convention`. Tested against an independent overlap, and on axtb's and the g-xTB 1.1.0 program's files, which read and write back to round-off.
