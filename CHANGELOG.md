@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.5.2] - 2026-11-17
+
+### Changed
+
+- Requires `qcdata<0.24`. The next releases of the qc* stack change qcdata's interfaces without compatibility, so this release line keeps resolving to a working set.
+
 ## [0.5.1] - 2026-10-21
 
 ### Added
