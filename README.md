@@ -27,14 +27,14 @@ python -m pip install qcinf
 ```
 
 installs the stable release, which works with qcdata 0.23. This README describes the
-next release, which is in alpha and works with qcdata's alpha; install them pinned
+next release, which is in alpha and works with qcdata's alpha; install them with minimum versions
 (`--prerelease=allow` lets the resolver take pre-releases):
 
 ```bash
-uv pip install --prerelease=allow "qcdata==0.24.0a6" "qcinf==0.6.0a1"
+uv pip install --prerelease=allow "qcdata>=0.24.0a8" "qcinf>=0.6.0a2"
 ```
 
-The extras below go on the pinned requirement the same way (`"qcinf[fast]==0.6.0a1"`).
+The extras below go on the requirement the same way (`"qcinf[fast]>=0.6.0a2"`).
 qcinf has no documentation site of its own; the qcdata structures it works on are
 documented at [qcdata.docs.afh.org/next](https://qcdata.docs.afh.org/next/) for the alpha.
 
