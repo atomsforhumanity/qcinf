@@ -118,6 +118,30 @@ from covalent radii. For production workflows, pass validated connectivity on th
 structures or through `a_connectivity=` and `b_connectivity=` so the graph used for
 assignment is explicit and reproducible.
 
+## Molden files
+
+`qcinf.molden` writes a qcdata `Wavefunction` as a Molden file, for orbital viewers
+(Molden, Jmol, Avogadro, IboView, Multiwfn) and programs that read the format, and reads
+Molden files back. The wavefunction needs its orbital coefficients and basis set, which
+programs return on request (the output `orbitals`).
+
+```python
+from qcinf import molden
+
+text = molden.write(output.results.wavefunction, output.input_data.structure)
+structure, wavefunction = molden.read(text)
+```
+
+Files are in atomic units (`[Atoms] AU`, energies in hartree) and qcdata's
+`MOLDEN_CONVENTION`: spherical functions as `[5D]`/`[7F]`/`[9G]` when the basis set
+has them (`cartesian=True` writes every shell as Cartesian functions), restricted
+closed-shell orbitals as one set with occupations 0 to 2, and open shells as alpha and
+beta sets with occupations 0 to 1. `read` returns the orbitals in the file's convention;
+`wavefunction.with_convention(...)` converts them. Files from xtb, tblite and the g-xTB
+program, which write the contraction coefficients of bare primitives, read with
+`molden.read(text, normalized_primitives=False)`. The
+[module documentation](./src/qcinf/molden.py) lists every convention.
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, the pre-commit workflow, running tests, and the release process.

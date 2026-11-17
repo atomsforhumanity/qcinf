@@ -1,7 +1,8 @@
 """Cheminformatics algorithms for qcdata structures.
 
 Provides RMSD, alignment, connectivity, and SMILES conversion utilities built on
-RDKit, OpenBabel, and native kernels.
+RDKit, OpenBabel, and native kernels, and Molden files of qcdata wavefunctions
+(`qcinf.molden`).
 """
 
 from importlib import metadata as _metadata
@@ -12,6 +13,7 @@ except _metadata.PackageNotFoundError:
     # Source tree / build hook / CI checkout
     __version__ = "0.0.0+local"
 
+from . import molden  # noqa: F401
 from .algorithms.connectivity import *  # noqa: F401, F403
 from .algorithms.conversion import *  # noqa: F401, F403
 from .algorithms.geometry import *  # noqa: F401, F403
