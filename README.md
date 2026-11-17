@@ -149,7 +149,9 @@ Files are in atomic units (`[Atoms] AU`, energies in hartree) and qcdata's
 `MOLDEN_CONVENTION`: spherical functions as `[5D]`/`[7F]`/`[9G]` when the basis set
 has them (`cartesian=True` writes every shell as Cartesian functions), restricted
 closed-shell orbitals as one set with occupations 0 to 2, and open shells as alpha and
-beta sets with occupations 0 to 1. `read` returns the orbitals in the file's convention;
+beta sets with occupations 0 to 1. The electrons the orbitals leave out (an ECP's core,
+`Orbitals.core_electrons`) go in a `[core]` section, as PySCF writes and reads it. `read`
+returns the orbitals in the file's convention;
 `wavefunction.with_convention(...)` converts them. Files from xtb, tblite and the g-xTB
 program, which write the contraction coefficients of bare primitives, read with
 `molden.read(text, normalized_primitives=False)`. The

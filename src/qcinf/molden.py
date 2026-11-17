@@ -39,11 +39,18 @@ functions use, which are those of the format as standard readers interpret it:
     spin's occupations, 0 to 1, so no occupation is lost;
   - unrestricted orbitals are an alpha set followed by a beta set, ``Occup`` 0 to 1.
 
+- ``[core]``: the electrons each atom has that the orbitals leave out
+  (`Orbitals.core_electrons`: an ECP's core, or the core a valence-only method leaves
+  out), one ``atom : n`` line per atom with a core, atoms numbered from 1, as PySCF
+  writes and reads it. `write` writes the section when any atom has a core; `read`
+  reads it back, and without it the orbitals have no core electrons. ``[Atoms]`` gives
+  every atom its atomic number either way.
+
 A Molden file does not carry everything a `Wavefunction` holds. `write` leaves out the
-AO matrices, effective core potentials, `Orbitals.core_electrons`, the electronic
-temperature and Fermi levels, and the orbital kind (orbitals without energies are
-written with ``Ene= 0.0``). `read` returns canonical orbitals at 0 K without core
-electrons, in the file's AO convention (`MOLDEN_CONVENTION` unless told otherwise);
+AO matrices, the effective core potentials themselves (only their cores, in
+``[core]``), the electronic temperature and Fermi levels, and the orbital kind (orbitals
+without energies are written with ``Ene= 0.0``). `read` returns canonical orbitals at
+0 K, in the file's AO convention (`MOLDEN_CONVENTION` unless told otherwise);
 `Wavefunction.with_convention` converts them to any other.
 
 Example:
@@ -140,9 +147,9 @@ def write(
 
     Raises:
         ValueError: If the wavefunction has no orbital coefficients, the structure has
-            fewer atoms than the basis set refers to, a shell has l > 4, or the shells of
-            one angular momentum mix spherical and Cartesian functions (without
-            ``cartesian``).
+            fewer atoms than the basis set refers to or than the orbitals' core
+            electrons list, a shell has l > 4, or the shells of one angular momentum mix
+            spherical and Cartesian functions (without ``cartesian``).
     """
     basis = wavefunction.basis
     orbitals = wavefunction.orbitals
@@ -157,6 +164,12 @@ def write(
         raise ValueError(
             f"the basis set has functions on atom {max(s.center for s in basis.shells)}, "
             f"but the structure has {natoms} atoms"
+        )
+    core = orbitals.core_electrons
+    if core is not None and len(core) != natoms:
+        raise ValueError(
+            f"the orbitals' core_electrons list {len(core)} atoms, but the structure "
+            f"has {natoms}"
         )
     if max((s.angular_momentum for s in basis.shells), default=0) > 4:
         raise ValueError(
@@ -205,6 +218,9 @@ def write(
             out.append(f"{_num(a):>24} {_num(d):>24}")
     out.append("")
     out.extend(_flag_sections(pure))
+    if core is not None and any(core):
+        out.append("[core]")
+        out.extend(f"{i + 1} : {n}" for i, n in enumerate(core) if n)
 
     morb = molden.orbitals
     assert morb.coefficients_a is not None
@@ -412,7 +428,9 @@ def read(
       open shell (what `write` writes for them); otherwise unrestricted orbitals.
 
     The structure's multiplicity is that of the occupations, 2S + 1 with
-    2S = n_alpha - n_beta rounded.
+    2S = n_alpha - n_beta rounded. A ``[core]`` section gives the orbitals'
+    `Orbitals.core_electrons`, one per atom (0 for an atom it does not list); without one,
+    or with no core, they are None.
 
     Args:
         text: The Molden file's text.
@@ -433,8 +451,8 @@ def read(
     Raises:
         ValueError: If the text lacks ``[Atoms]``, ``[GTO]`` or ``[MO]``, has Slater
             functions (``[STO]``), contradictory flags, coefficients beyond the basis
-            set's functions, alpha and beta sets of different sizes, or occupations out
-            of range.
+            set's functions, alpha and beta sets of different sizes, occupations out of
+            range, or a ``[core]`` line that is not ``atom : n`` for one of its atoms.
     """
     sections = _sections(text)
     names = [name for name, _, _ in sections]
@@ -453,7 +471,8 @@ def read(
     symbols, geometry = _read_atoms(*body["atoms"])
     shells = _read_gto(body["gto"][1], pure, len(symbols), normalized_primitives)
     basis = BasisSet(shells=shells, ao_convention=ao_convention)
-    orbitals = _read_mo(body["mo"][1], basis.nao)
+    core = _read_core(body["core"][1], len(symbols)) if "core" in body else None
+    orbitals = _read_mo(body["mo"][1], basis.nao, core)
     n_unpaired = float(orbitals.occupations_a.sum() - orbitals.occupations_b.sum())
     structure = Structure(
         symbols=symbols,
@@ -547,6 +566,28 @@ def _element(label: str, number: str) -> str:
         ) from err
 
 
+def _read_core(lines: list[str], natoms: int) -> list[int] | None:
+    """Core electrons per atom from ``[core]`` lines ``atom : n``; None if none."""
+    core = [0] * natoms
+    for line in lines:
+        if not line.strip():
+            continue
+        f = line.split(":")
+        try:
+            atom, n = int(f[0]), int(f[1])
+        except (IndexError, ValueError) as err:
+            raise ValueError(
+                f"a [core] line is 'atom : core electrons', not {line.strip()!r}"
+            ) from err
+        if not 1 <= atom <= natoms or n < 0 or len(f) > 2:
+            raise ValueError(
+                f"the [core] line {line.strip()!r} needs one of the {natoms} atoms and "
+                "a core of 0 or more electrons"
+            )
+        core[atom - 1] = n
+    return core if any(core) else None
+
+
 def _read_gto(
     lines: list[str], pure: dict[int, bool], natoms: int, normalized_primitives: bool
 ) -> list[Shell]:
@@ -610,8 +651,8 @@ def _normalize(l: int, a: np.ndarray, raw: np.ndarray) -> np.ndarray:
     return raw / math.sqrt(s)
 
 
-def _read_mo(lines: list[str], nao: int) -> Orbitals:
-    """The orbitals of the ``[MO]`` section."""
+def _read_mo(lines: list[str], nao: int, core: list[int] | None) -> Orbitals:
+    """The orbitals of the ``[MO]`` section, with the atoms' core electrons."""
     mos: list[_Mo] = []
     cur: _Mo | None = None
     seen: set[str] = set()
@@ -682,6 +723,7 @@ def _read_mo(lines: list[str], nao: int) -> Orbitals:
             energies_a=ea,
             occupations_a=occ_a,
             occupations_b=occ_b,
+            core_electrons=core,
             coefficients_a=ca,
         )
     if len(alpha) != len(beta):
@@ -700,6 +742,7 @@ def _read_mo(lines: list[str], nao: int) -> Orbitals:
             energies_a=ea,
             occupations_a=na,
             occupations_b=nb,
+            core_electrons=core,
             coefficients_a=ca,
         )
     return Orbitals(
@@ -708,6 +751,7 @@ def _read_mo(lines: list[str], nao: int) -> Orbitals:
         energies_b=eb,
         occupations_a=na,
         occupations_b=nb,
+        core_electrons=core,
         coefficients_a=ca,
         coefficients_b=cb,
     )

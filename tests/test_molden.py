@@ -14,6 +14,10 @@ Fixtures in tests/data/molden (xz-compressed Molden files):
 - ``gxtb-1.1.0-*``: molden.input files of the g-xTB 1.1.0 program (axtb's reference set,
   crates/gxtb/tests/reference), which writes the contraction coefficients of bare
   primitives.
+- ``pyscf-2.15.1-iodomethane``: PySCF 2.15.1's ``tools.molden.from_scf`` of a converged
+  RHF of CH3I in def2-SVP with the def2 ECP on iodine (28 core electrons; energy
+  -336.2326383048052 Eh, conv_tol 1e-11), C-I 2.139 A along z. It has a ``[core]``
+  section and iodine's effective charge, 25, in the ``[Atoms]`` charge column.
 """
 
 # l is the conventional symbol for angular momentum.
@@ -48,6 +52,7 @@ DATA = Path(__file__).parent / "data" / "molden"
 AXTB = json.loads((DATA / "axtb.json").read_text())["cases"]
 D_CASES = [k for k in AXTB if (DATA / f"axtb-{k}.cart.molden.xz").exists()]
 GXTB11 = ["water", "dioxygen_triplet", "iodomethane", "tetrachlorocuprate"]
+PYSCF_CH3I = "pyscf-2.15.1-iodomethane"
 
 
 def fixture(name: str) -> str:
@@ -352,6 +357,101 @@ def test_gxtb_program_files(name):
         abs(mi.orthonormality(ours, s) - mi.orthonormality(program, pb.overlap()))
         < 1e-14
     )
+
+
+# ------------------------------------------------------------------ core electrons
+
+
+def with_core(wf: Wavefunction, core: list[int] | None) -> Wavefunction:
+    orbitals = Orbitals.model_validate(
+        wf.orbitals.model_dump() | {"core_electrons": core}
+    )
+    return Wavefunction(orbitals=orbitals, basis=wf.basis)
+
+
+def test_core_electrons_round_trip():
+    """A [core] section carries the electrons the orbitals leave out, per atom."""
+    wf = with_core(make_wavefunction("closed", make_basis()), [2, 0, 0])
+    text = molden.write(wf, water)
+    assert "\n[core]\n1 : 2\n[MO]\n" in text
+    _, back = molden.read(text)
+    assert back.orbitals.core_electrons == [2, 0, 0]
+    # no core: no section, and None back
+    for core in (None, [0, 0, 0]):
+        text = molden.write(with_core(wf, core), water)
+        assert "[core]" not in text
+        assert molden.read(text)[1].orbitals.core_electrons is None
+    with pytest.raises(ValueError, match="core_electrons list 2 atoms"):
+        molden.write(with_core(wf, [2, 0]), water)
+
+
+def test_read_refuses_a_bad_core_section():
+    text = H2O.format(mos=mo_block([2, 2, 1, 0, 0, 0])).replace(
+        "[MO]", "[core]\n{core}\n[MO]"
+    )
+    assert molden.read(text.format(core="1 : 2"))[1].orbitals.core_electrons == [
+        2,
+        0,
+        0,
+    ]
+    for bad in ("1 2", "4 : 2", "1 : -2", "1 : two", "1 : 2 : 3"):
+        with pytest.raises(ValueError, match=r"\[core\] line"):
+            molden.read(text.format(core=bad))
+
+
+def test_pyscf_ecp_file_reads_and_writes_back():
+    """PySCF's file of an ECP calculation: the core is read, and written back."""
+    text = fixture(PYSCF_CH3I)
+    structure, wf = molden.read(text)
+    assert structure.symbols == ["C", "H", "H", "H", "I"]
+    orbitals = wf.orbitals
+    assert orbitals.core_electrons == [0, 0, 0, 0, 28]
+    held = orbitals.occupations_a.sum() + orbitals.occupations_b.sum()
+    assert held == sum(structure.atomic_numbers) - 28 == 34
+    written = molden.write(wf, structure)
+    assert "\n[core]\n5 : 28\n" in written
+    assert molden.read(written)[1].orbitals.core_electrons == [0, 0, 0, 0, 28]
+    # PySCF flags [9g] with no g shell; qcinf flags only the shell types it has
+    assert "[9G]" not in written
+    assert_same_file(
+        mi.parse(text.replace("[9g]\n", "")), mi.parse(written), rtol=1e-13
+    )
+
+
+def test_pyscf_counts_the_electrons_of_a_written_ecp_file(tmp_path):
+    """PySCF reads the core of a file qcinf wrote, and its orbitals give PySCF's energy.
+
+    PySCF's molden.load builds the molecule before it reads [core] and keeps the core
+    in mol.ecp, so the molecule is rebuilt to count its electrons (as for PySCF's own
+    files). The energy is that of each file's density in the native molecule (with the
+    ECP itself, which no Molden file holds).
+    """
+    pytest.importorskip("pyscf")
+    from pyscf import gto, scf
+    from pyscf.tools import molden as pyscf_molden
+
+    theirs = tmp_path / "pyscf.molden"
+    theirs.write_text(fixture(PYSCF_CH3I))
+    structure, wf = molden.read(theirs.read_text())
+    ours = tmp_path / "qcinf.molden"
+    ours.write_text(molden.write(wf, structure))
+
+    native = gto.M(
+        atom=list(zip(structure.symbols, structure.geometry.tolist(), strict=True)),
+        unit="Bohr",
+        basis="def2-svp",
+        ecp={"I": "def2-svp"},
+        verbose=0,
+    )
+    rhf = scf.RHF(native)
+    energies = []
+    for path in (theirs, ours):
+        mol, _, mo_coeff, mo_occ, _, _ = pyscf_molden.load(str(path))
+        mol.build(0, 0)
+        assert mol.nelectron == 34 == mo_occ.sum()
+        energies.append(rhf.energy_tot(rhf.make_rdm1(mo_coeff, mo_occ)))
+    assert energies[0] == pytest.approx(-336.2326383048052, abs=1e-8)
+    assert abs(energies[1] - energies[0]) < 1e-10
 
 
 # ------------------------------------------------------------------ reading
