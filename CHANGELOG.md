@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+### Changed
+
+- 🚨 Requires `qcdata>=0.24.0a4`, the alpha of the redesigned qc* stack.
+
 ## [0.5.2] - 2026-11-17
 
 ### Changed

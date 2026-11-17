@@ -1331,20 +1331,8 @@ wheels = [
 ]
 
 [[package]]
-name = "qcconst"
-version = "0.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "qcref" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0b/e3/290d6975f1fe587b9935ea980a5e6c7bbc57b410e25a8d787520698d006e/qcconst-0.3.0.tar.gz", hash = "sha256:55aadacc896935af052f936f887cc4d0bae05bbad942f8f904bdd546a2a2ceb7", size = 3593, upload-time = "2026-10-15T01:19:18.837Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/97/63deae84f483f3e9d77eb410738b6316c02afe0e9dcbd86fadbe20f9defc/qcconst-0.3.0-py3-none-any.whl", hash = "sha256:f4452860363647a1c408130d9b06fe0f3110298e6834ba0071222be9f45fa1b6", size = 3236, upload-time = "2026-10-15T01:19:17.623Z" },
-]
-
-[[package]]
 name = "qcdata"
-version = "0.20.0"
+version = "0.24.0a4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eval-type-backport" },
@@ -1352,13 +1340,13 @@ dependencies = [
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pydantic" },
     { name = "pyyaml" },
-    { name = "qcconst" },
+    { name = "qcref" },
     { name = "toml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ce/37/98c499bc17935661583f9483586277b31890323c8d359bb5f090c357d8f9/qcdata-0.20.0.tar.gz", hash = "sha256:a0e72ef3e0d0bc7f0983fad5d73321511b7b22e28a0a8eaec9724069ec738d88", size = 1523481, upload-time = "2026-10-14T22:47:31.481Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/18/40/627c8fbd0cfbe991d9975a7a3d8454a6ef28d39075f1a5dd8da8db719bd9/qcdata-0.24.0a4.tar.gz", hash = "sha256:5cf9c6a914ad423fc19debd02d39b105dbd6a9cb63296da6b734c964d9cb46ae", size = 1456665, upload-time = "2026-11-17T03:26:10.171Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/17/61bdbfaac79632f7f02422ea954c7217ce5c047243361520175fa1276177/qcdata-0.20.0-py3-none-any.whl", hash = "sha256:7e49d8c2bd2dd07728077f4f72510c0f4cb0a11c87d035d10007ad3353c5c68d", size = 38379, upload-time = "2026-10-14T22:47:29.565Z" },
+    { url = "https://files.pythonhosted.org/packages/06/e9/46c4e698427236d488e4fe84297646a6ec5832f2c0f972e47d7b5dffdfdb/qcdata-0.24.0a4-py3-none-any.whl", hash = "sha256:0fe6f7e1c5ad8e194304ece83adfd6ebe8989cdb32dd802ba23ac343559140ed", size = 77060, upload-time = "2026-11-17T03:26:08.541Z" },
 ]
 
 [[package]]
@@ -1416,7 +1404,7 @@ requires-dist = [
     { name = "openbabel-wheel", marker = "extra == 'openbabel'", specifier = ">=3.1.1.21" },
     { name = "pydantic", specifier = "~=2.0,!=2.0.1,!=2.1.0" },
     { name = "pynauty", specifier = ">=2.8.8.1" },
-    { name = "qcdata", specifier = ">=0.17.0,<0.24" },
+    { name = "qcdata", specifier = ">=0.24.0a4" },
     { name = "qcref", specifier = ">=0.3.0" },
     { name = "rdkit", marker = "extra == 'all'", specifier = ">=2024.9.6" },
     { name = "rdkit", marker = "extra == 'rdkit'", specifier = ">=2024.9.6" },
