@@ -7,7 +7,7 @@ authors = [{ name = "Colton Hicks", email = "github@coltonhicks.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic~=2.0,!=2.0.1,!=2.1.0",
-    "qcdata>=0.24.0a4",
+    "qcdata>=0.24.0a5",
     "typing-extensions>=4.12.2",
     "numpy>=1.24.0",
     "sympy>=1.14.0",

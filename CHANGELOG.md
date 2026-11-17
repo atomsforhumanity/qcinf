@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- 🚨 Requires `qcdata>=0.24.0a4`, the alpha of the redesigned qc* stack.
+- 🚨 Requires `qcdata>=0.24.0a5`, the alpha of the redesigned qc* stack.
 - The release workflow creates a GitHub pre-release for pre-release tags (`0.6.0a1`, `0.6.0b1`, `0.6.0rc1`).
 
 ## [0.5.2] - 2026-11-17
