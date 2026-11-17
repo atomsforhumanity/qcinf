@@ -34,7 +34,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/atomsforhumanity/qcinf"
 Source = "https://github.com/atomsforhumanity/qcinf"
-Changelog = "https://github.com/atomsforhumanity/qcinf/blob/master/CHANGELOG.md"
+Changelog = "https://github.com/atomsforhumanity/qcinf/blob/next/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/atomsforhumanity/qcinf/issues"
 repository = "https://github.com/atomsforhumanity/qcinf"
 
