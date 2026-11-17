@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.6.0a2] - 2026-11-17
+
+### Added
+
+- `molden.write` writes a `[core]` section (`atom : n`, atoms counted from 1, as PySCF writes it) when `Orbitals.core_electrons` has non-zero entries, and `molden.read` reads it back into `core_electrons`. An ECP calculation's Molden file now gives readers the right electron count (PySCF: 34 for CH3I/def2-SVP, where it read 62).
+
+### Changed
+
+- The README's install line and links point at the alpha set and the `next` branch.
+
+
 ## [0.6.0a1] - 2026-11-17
 
 ### Added
