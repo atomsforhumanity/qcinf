@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.6.0] - 2026-11-19
+
+The final release of the 0.6.0 alphas: their entries below make up its changes. Since 0.6.0a2:
+
+### Changed
+
+- Requires qcdata 0.24.0 or later; the README's install line and links point at the final releases.
+
+## [0.6.0a2] - 2026-11-17
+
+### Added
+
+- `molden.write` writes a `[core]` section (`atom : n`, atoms counted from 1, as PySCF writes it) when `Orbitals.core_electrons` has non-zero entries, and `molden.read` reads it back into `core_electrons`. An ECP calculation's Molden file now gives readers the right electron count (PySCF: 34 for CH3I/def2-SVP, where it read 62).
+
+### Changed
+
+- The README's install line and links point at the alpha set and the `next` branch.
+
+
+## [0.6.0a1] - 2026-11-17
+
+### Added
+
+- `qcinf.molden`: `write(wavefunction, structure)` turns a qcdata `Wavefunction` with orbital coefficients into the text of a Molden file, and `read(text)` returns a `Structure` and `Wavefunction`. Files are in atomic units and qcdata's `MOLDEN_CONVENTION` (through `Wavefunction.with_convention`); spherical shells are written as `[5D]`/`[7F]`/`[9G]`, or as Cartesian functions with `cartesian=True`. Restricted closed shells are one set (occupations 0 to 2), restricted open shells and unrestricted orbitals alpha and beta sets (0 to 1). Files with the contraction coefficients of bare primitives (xtb, tblite, the g-xTB program) read with `normalized_primitives=False`, and other component normalizations with `ao_convention`. Tested against an independent overlap, and on axtb's and the g-xTB 1.1.0 program's files, which read and write back to round-off.
+
+### Changed
+
+- 🚨 Requires `qcdata>=0.24.0a5`, the alpha of the redesigned qc* stack.
+- The release workflow creates a GitHub pre-release for pre-release tags (`0.6.0a1`, `0.6.0b1`, `0.6.0rc1`).
+
 ## [0.5.2] - 2026-11-17
 
 ### Changed
@@ -132,7 +162,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Setup all DevOps workflows and basic package setup.
 - Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcdata` into this repo.
 
-[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.5.1...HEAD
+[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.6.0
 [0.5.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.5.1
 [0.5.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.5.0
 [0.4.2]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.2

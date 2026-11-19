@@ -12,10 +12,11 @@ Cheminformatics algorithms and structure utilities for [qcdata](https://github.c
 These packages work together to make quantum chemistry fast, structured, and interoperable.
 
 - [qcref](https://github.com/atomsforhumanity/qcref) - Reference data for computational chemistry: CODATA physical constants, conversion factors, a periodic table, and solvent properties, each value with its source.
-- [qcdata](https://github.com/atomsforhumanity/qcdata) - Data structures for quantum chemistry inputs and results, with Jupyter visualizations. [Documentation](https://qcdata.docs.afh.org)
+- [qcdata](https://github.com/atomsforhumanity/qcdata) - Data structures for quantum chemistry inputs and results, with Jupyter visualizations. [Documentation](https://qcdata.docs.afh.org/)
 - [qcinf](https://github.com/atomsforhumanity/qcinf) - Cheminformatics algorithms and structure utilities for [qcdata](https://github.com/atomsforhumanity/qcdata) structures.
-- [qccodec](https://github.com/atomsforhumanity/qccodec) - Translates [qcdata](https://github.com/atomsforhumanity/qcdata) inputs into native program inputs and parses program outputs back into qcdata objects, one codec per program.
-- [qccompute](https://github.com/atomsforhumanity/qccompute) - Runs quantum chemistry programs on [qcdata](https://github.com/atomsforhumanity/qcdata) inputs using [qccodec](https://github.com/atomsforhumanity/qccodec) codecs and returns structured results. [Documentation](https://qccompute.docs.afh.org)
+- [qccompute](https://github.com/atomsforhumanity/qccompute) - Runs programs on [qcdata](https://github.com/atomsforhumanity/qcdata) inputs, one calculation or many, in this process or in workers, with an optional store, and returns structured results. [Documentation](https://qccompute.docs.afh.org/)
+- [qccodec](https://github.com/atomsforhumanity/qccodec) - The optional add-on for external programs (ORCA, Psi4, xtb, CREST, ...): writes their native inputs, runs them and parses their outputs, registering each as a program qccompute runs. [Documentation](https://qccodec.docs.afh.org/)
+- [qcstore](https://github.com/atomsforhumanity/qcstore) - Keeps results under their calculation key: immutable runs, tags, and an optional index.
 - [BigChem](https://github.com/mtzgroup/bigchem) - Distributed execution of qccompute calculations across clusters of computers or the cloud.
 - [ChemCloud](https://github.com/mtzgroup/chemcloud-client) - A [web application](https://github.com/mtzgroup/chemcloud-server) and [Python client](https://github.com/mtzgroup/chemcloud-client) that expose a BigChem cluster securely over the internet.
 
@@ -24,6 +25,9 @@ These packages work together to make quantum chemistry fast, structured, and int
 ```bash
 python -m pip install qcinf
 ```
+
+installs it with qcdata. qcinf has no documentation site of its own; the qcdata structures it
+works on are documented at [qcdata.docs.afh.org](https://qcdata.docs.afh.org/).
 
 To install with numba-accelerated kernels:
 
@@ -118,9 +122,35 @@ from covalent radii. For production workflows, pass validated connectivity on th
 structures or through `a_connectivity=` and `b_connectivity=` so the graph used for
 assignment is explicit and reproducible.
 
+## Molden files
+
+`qcinf.molden` writes a qcdata `Wavefunction` as a Molden file, for orbital viewers
+(Molden, Jmol, Avogadro, IboView, Multiwfn) and programs that read the format, and reads
+Molden files back. The wavefunction needs its orbital coefficients and basis set, which
+programs return on request (the output `orbitals`).
+
+```python
+from qcinf import molden
+
+text = molden.write(output.results.wavefunction, output.input_data.structure)
+structure, wavefunction = molden.read(text)
+```
+
+Files are in atomic units (`[Atoms] AU`, energies in hartree) and qcdata's
+`MOLDEN_CONVENTION`: spherical functions as `[5D]`/`[7F]`/`[9G]` when the basis set
+has them (`cartesian=True` writes every shell as Cartesian functions), restricted
+closed-shell orbitals as one set with occupations 0 to 2, and open shells as alpha and
+beta sets with occupations 0 to 1. The electrons the orbitals leave out (an ECP's core,
+`Orbitals.core_electrons`) go in a `[core]` section, as PySCF writes and reads it. `read`
+returns the orbitals in the file's convention;
+`wavefunction.with_convention(...)` converts them. Files from xtb, tblite and the g-xTB
+program, which write the contraction coefficients of bare primitives, read with
+`molden.read(text, normalized_primitives=False)`. The
+[module documentation](https://github.com/atomsforhumanity/qcinf/blob/master/src/qcinf/molden.py) lists every convention.
+
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, the pre-commit workflow, running tests, and the release process.
+See [CONTRIBUTING.md](https://github.com/atomsforhumanity/qcinf/blob/master/CONTRIBUTING.md) for development setup, the pre-commit workflow, running tests, and the release process.
 
 ## Support
 

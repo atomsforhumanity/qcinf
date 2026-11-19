@@ -1,13 +1,13 @@
 [project]
 name = "qcinf"
-version = "0.5.2"
-description = "Cheminformatics algorithms and structure utilities using standardized qcdata data structures."
+version = "0.6.0"
+description = "Cheminformatics algorithms, structure utilities and Molden files for qcdata structures."
 readme = "README.md"
 authors = [{ name = "Colton Hicks", email = "github@coltonhicks.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic~=2.0,!=2.0.1,!=2.1.0",
-    "qcdata>=0.17.0,<0.24",
+    "qcdata>=0.24.0",
     "typing-extensions>=4.12.2",
     "numpy>=1.24.0",
     "sympy>=1.14.0",
@@ -21,7 +21,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -54,6 +53,9 @@ dev = [
     "pre-commit-hooks>=5.0",
     "detect-secrets>=1.5",
     "typos>=1.30",
+    # Reads written Molden files back in the tests. Its h5py has no Python 3.15 wheels
+    # yet; that test skips without it.
+    "pyscf>=2.15 ; python_full_version < '3.15'",
 ]
 
 [project.optional-dependencies]
