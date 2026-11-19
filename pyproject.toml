@@ -1,13 +1,13 @@
 [project]
 name = "qcinf"
-version = "0.6.0a2"
+version = "0.6.0"
 description = "Cheminformatics algorithms, structure utilities and Molden files for qcdata structures."
 readme = "README.md"
 authors = [{ name = "Colton Hicks", email = "github@coltonhicks.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic~=2.0,!=2.0.1,!=2.1.0",
-    "qcdata>=0.24.0a5",
+    "qcdata>=0.24.0",
     "typing-extensions>=4.12.2",
     "numpy>=1.24.0",
     "sympy>=1.14.0",
@@ -33,7 +33,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/atomsforhumanity/qcinf"
 Source = "https://github.com/atomsforhumanity/qcinf"
-Changelog = "https://github.com/atomsforhumanity/qcinf/blob/next/CHANGELOG.md"
+Changelog = "https://github.com/atomsforhumanity/qcinf/blob/master/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/atomsforhumanity/qcinf/issues"
 repository = "https://github.com/atomsforhumanity/qcinf"
 

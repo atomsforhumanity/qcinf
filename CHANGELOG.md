@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.6.0] - 2026-11-19
+
+The final release of the 0.6.0 alphas: their entries below make up its changes. Since 0.6.0a2:
+
+### Changed
+
+- Requires qcdata 0.24.0 or later; the README's install line and links point at the final releases.
+
 ## [0.6.0a2] - 2026-11-17
 
 ### Added
@@ -154,7 +162,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Setup all DevOps workflows and basic package setup.
 - Copied over all cheminformatics functions (e.g., `rmsd`, `align`, `filter_conformers` (formerly `ConformerSearchResults.conformers_filtered()`), `Structure.from_smiles()`, `Structure.to_smiles()`, etc.) from `qcdata` into this repo.
 
-[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.5.1...HEAD
+[unreleased]: https://github.com/atomsforhumanity/qcinf/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.6.0
 [0.5.1]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.5.1
 [0.5.0]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.5.0
 [0.4.2]: https://github.com/atomsforhumanity/qcinf/releases/tag/0.4.2

@@ -12,10 +12,10 @@ Cheminformatics algorithms and structure utilities for [qcdata](https://github.c
 These packages work together to make quantum chemistry fast, structured, and interoperable.
 
 - [qcref](https://github.com/atomsforhumanity/qcref) - Reference data for computational chemistry: CODATA physical constants, conversion factors, a periodic table, and solvent properties, each value with its source.
-- [qcdata](https://github.com/atomsforhumanity/qcdata) - Data structures for quantum chemistry inputs and results, with Jupyter visualizations. [Documentation](https://qcdata.docs.afh.org/next/)
+- [qcdata](https://github.com/atomsforhumanity/qcdata) - Data structures for quantum chemistry inputs and results, with Jupyter visualizations. [Documentation](https://qcdata.docs.afh.org/)
 - [qcinf](https://github.com/atomsforhumanity/qcinf) - Cheminformatics algorithms and structure utilities for [qcdata](https://github.com/atomsforhumanity/qcdata) structures.
-- [qccompute](https://github.com/atomsforhumanity/qccompute) - Runs programs on [qcdata](https://github.com/atomsforhumanity/qcdata) inputs, one calculation or many, in this process or in workers, with an optional store, and returns structured results. [Documentation](https://qccompute.docs.afh.org/next/)
-- [qccodec](https://github.com/atomsforhumanity/qccodec) - The optional add-on for external programs (ORCA, Psi4, xtb, CREST, ...): writes their native inputs, runs them and parses their outputs, registering each as a program qccompute runs. [Documentation](https://qccodec.docs.afh.org/next/)
+- [qccompute](https://github.com/atomsforhumanity/qccompute) - Runs programs on [qcdata](https://github.com/atomsforhumanity/qcdata) inputs, one calculation or many, in this process or in workers, with an optional store, and returns structured results. [Documentation](https://qccompute.docs.afh.org/)
+- [qccodec](https://github.com/atomsforhumanity/qccodec) - The optional add-on for external programs (ORCA, Psi4, xtb, CREST, ...): writes their native inputs, runs them and parses their outputs, registering each as a program qccompute runs. [Documentation](https://qccodec.docs.afh.org/)
 - [qcstore](https://github.com/atomsforhumanity/qcstore) - Keeps results under their calculation key: immutable runs, tags, and an optional index.
 - [BigChem](https://github.com/mtzgroup/bigchem) - Distributed execution of qccompute calculations across clusters of computers or the cloud.
 - [ChemCloud](https://github.com/mtzgroup/chemcloud-client) - A [web application](https://github.com/mtzgroup/chemcloud-server) and [Python client](https://github.com/mtzgroup/chemcloud-client) that expose a BigChem cluster securely over the internet.
@@ -26,17 +26,8 @@ These packages work together to make quantum chemistry fast, structured, and int
 python -m pip install qcinf
 ```
 
-installs the stable release, which works with qcdata 0.23. This README describes the
-next release, which is in alpha and works with qcdata's alpha; install them with minimum versions
-(`--prerelease=allow` lets the resolver take pre-releases):
-
-```bash
-uv pip install --prerelease=allow "qcdata>=0.24.0a8" "qcinf>=0.6.0a2"
-```
-
-The extras below go on the requirement the same way (`"qcinf[fast]>=0.6.0a2"`).
-qcinf has no documentation site of its own; the qcdata structures it works on are
-documented at [qcdata.docs.afh.org/next](https://qcdata.docs.afh.org/next/) for the alpha.
+installs it with qcdata. qcinf has no documentation site of its own; the qcdata structures it
+works on are documented at [qcdata.docs.afh.org](https://qcdata.docs.afh.org/).
 
 To install with numba-accelerated kernels:
 
@@ -155,11 +146,11 @@ returns the orbitals in the file's convention;
 `wavefunction.with_convention(...)` converts them. Files from xtb, tblite and the g-xTB
 program, which write the contraction coefficients of bare primitives, read with
 `molden.read(text, normalized_primitives=False)`. The
-[module documentation](https://github.com/atomsforhumanity/qcinf/blob/next/src/qcinf/molden.py) lists every convention.
+[module documentation](https://github.com/atomsforhumanity/qcinf/blob/master/src/qcinf/molden.py) lists every convention.
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/atomsforhumanity/qcinf/blob/next/CONTRIBUTING.md) for development setup, the pre-commit workflow, running tests, and the release process.
+See [CONTRIBUTING.md](https://github.com/atomsforhumanity/qcinf/blob/master/CONTRIBUTING.md) for development setup, the pre-commit workflow, running tests, and the release process.
 
 ## Support
 

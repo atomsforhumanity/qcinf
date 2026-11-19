@@ -1419,7 +1419,7 @@ wheels = [
 
 [[package]]
 name = "qcdata"
-version = "0.24.0a5"
+version = "0.24.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eval-type-backport" },
@@ -1431,14 +1431,14 @@ dependencies = [
     { name = "toml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/60/60dd021c27110e96f88347cd7ff3166f7e6b07be2e920019e999b5618924/qcdata-0.24.0a5.tar.gz", hash = "sha256:322eedd1883176b2392b746f56e10532e019205ec3b9c1e71f8da50555e2e655", size = 1463344, upload-time = "2026-11-17T06:07:38.129Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/a3/d49d6d25d5234dca908469ded6c4b552f26746bd85363346e8b3fa5b3048/qcdata-0.24.0.tar.gz", hash = "sha256:bce39cfc1eafb82f5795bacdea4c7b50fd8ba97ce5f1eb31228da8c6fba8a458", size = 1470029, upload-time = "2026-11-19T21:06:09.787Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7b/87/bd6589e5f95f8421aa3e38e1c21b1b8a1b49773672df6fcd96d3beedaeed/qcdata-0.24.0a5-py3-none-any.whl", hash = "sha256:9bc6ddc2c190b5cd0c8c002a7c9da8da7ebdf01909da9b71a873f378e39d8deb", size = 79284, upload-time = "2026-11-17T06:07:36.885Z" },
+    { url = "https://files.pythonhosted.org/packages/78/d2/daca7dc0b83310ce12ad838f63de7a6d9825a3799575994a638c2575f43c/qcdata-0.24.0-py3-none-any.whl", hash = "sha256:58cde1221fa1e845503cec0b6a0a9e4264a758d3d234ed1354a3fecb74303743", size = 80211, upload-time = "2026-11-19T21:06:08.2Z" },
 ]
 
 [[package]]
 name = "qcinf"
-version = "0.6.0a2"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -1492,7 +1492,7 @@ requires-dist = [
     { name = "openbabel-wheel", marker = "extra == 'openbabel'", specifier = ">=3.1.1.21" },
     { name = "pydantic", specifier = "~=2.0,!=2.0.1,!=2.1.0" },
     { name = "pynauty", specifier = ">=2.8.8.1" },
-    { name = "qcdata", specifier = ">=0.24.0a5" },
+    { name = "qcdata", specifier = ">=0.24.0" },
     { name = "qcref", specifier = ">=0.3.0" },
     { name = "rdkit", marker = "extra == 'all'", specifier = ">=2024.9.6" },
     { name = "rdkit", marker = "extra == 'rdkit'", specifier = ">=2024.9.6" },
